@@ -8,11 +8,14 @@ import type { DiscordMessage } from '../discord/message.js'
 const firebaseConfig = {
   apiKey: process.env.FIREBASE_API_KEY,
   authDomain: process.env.FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.FIREBASE_PROJECT_ID,
+  projectId: process.env.USE_FIREBASE_EMULATOR === 'true' ? 'discord-reblog' : process.env.FIREBASE_PROJECT_ID,
   storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.FIREBASE_APP_ID
 }
+
+// エミュレータ使用時のプロジェクトID
+const projectId = process.env.USE_FIREBASE_EMULATOR === 'true' ? 'discord-reblog' : process.env.FIREBASE_PROJECT_ID
 
 // Firebaseの初期化
 const app = initializeApp(firebaseConfig)
@@ -20,9 +23,12 @@ const db = getFirestore(app)
 
 // 開発環境の場合はエミュレータに接続
 if (process.env.NODE_ENV === 'development' || process.env.USE_FIREBASE_EMULATOR === 'true') {
-  const { connectFirestoreEmulator } = require('firebase/firestore')
-  connectFirestoreEmulator(db, 'localhost', 8080)
-  console.log('Using Firestore emulator on localhost:8080')
+  import('firebase/firestore').then(({ connectFirestoreEmulator }) => {
+    const emulatorHost = process.env.FIRESTORE_EMULATOR_HOST || 'localhost'
+    const emulatorPort = parseInt(process.env.FIRESTORE_EMULATOR_PORT || '8080', 10)
+    connectFirestoreEmulator(db, emulatorHost, emulatorPort)
+    console.log(`Using Firestore emulator on ${emulatorHost}:${emulatorPort}`)
+  })
 }
 
 // Reblogエントリの型定義

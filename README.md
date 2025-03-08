@@ -75,11 +75,21 @@ pnpm run dev:emulator
 ##### Dockerを使用する場合（推奨）
 
 ```bash
+# 方法1: 別々のターミナルで起動
 # 別のターミナルでDockerコンテナを起動
 pnpm run emulators:docker
 
 # エミュレータを使用して開発サーバーを起動
-pnpm run dev:emulator
+pnpm run dev:emulator:docker
+
+# 終了時にDockerコンテナを停止
+pnpm run emulators:docker:stop
+```
+
+```bash
+# 方法2: 一度に起動（推奨）
+# Dockerコンテナとエミュレータモードのサーバーを一度に起動
+pnpm run dev:docker
 
 # 終了時にDockerコンテナを停止
 pnpm run emulators:docker:stop

@@ -4,10 +4,9 @@ services:
     image: google/cloud-sdk:emulators
     ports:
       - "8080:8080"
-      - "4000:4000"
     command: >
       bash -c "
-        gcloud beta emulators firestore start --host=0.0.0.0 --port=8080 --project=discord-reblog
+        gcloud beta emulators firestore start --host-port=0.0.0.0:8080
       "
     environment:
       - FIRESTORE_PROJECT_ID=discord-reblog
@@ -19,7 +18,7 @@ services:
     ports:
       - "4000:4000"
     command: >
-      firebase emulators:start --only firestore --project discord-reblog --no-emulator-ui-import --no-emulator-ui-export
+      firebase emulators:start --only firestore --project discord-reblog
     environment:
       - FIRESTORE_EMULATOR_HOST=firestore:8080
     depends_on:

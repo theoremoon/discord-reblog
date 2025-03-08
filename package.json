@@ -2,11 +2,7 @@
   "name": "discord-reblog",
   "type": "module",
   "scripts": {
-    "dev": "tsx --watch --env-file .env src/index.ts",
-    "emulators": "firebase emulators:start",
-    "emulators:docker": "docker-compose up",
-    "emulators:docker:stop": "docker-compose down",
-    "dev:emulator": "cross-env USE_FIREBASE_EMULATOR=true tsx --watch --env-file .env src/index.ts",
+    "dev": "cross-env USE_FIREBASE_EMULATOR=true FIRESTORE_EMULATOR_HOST=localhost tsx --watch --env-file .env src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
