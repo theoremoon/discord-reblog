@@ -10,9 +10,8 @@ export const Header: FC<HeaderProps> = ({ user }) => {
     <header>
       <h1><a href="/" style={{ textDecoration: 'none', color: 'inherit' }}>Discord Reblog</a></h1>
       <nav className="main-nav">
-        <a href="/" className="nav-link">ホーム</a>
-        <a href="/reblog" className="nav-link">Reblogタイムライン</a>
-        <a href="/stars" className="nav-link">スター付きエントリ</a>
+        <a href="/reblog" className="nav-link">reblog</a>
+        <a href="/stars" className="nav-link">お気に入り</a>
       </nav>
       <div className="user-info">
         {user.avatar && (
@@ -22,7 +21,6 @@ export const Header: FC<HeaderProps> = ({ user }) => {
             className="user-avatar" 
           />
         )}
-        <span>{user.username}</span>
         <a href="/logout" className="logout-button">ログアウト</a>
       </div>
     </header>
