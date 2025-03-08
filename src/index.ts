@@ -4,7 +4,8 @@ import { logger } from 'hono/logger'
 import { authMiddleware, guildCheckMiddleware, renderLoginPage, renderGuildErrorPage } from './auth/middleware.js'
 import { handleCallback } from './auth/discord.js'
 import { deleteSession, getSession } from './utils/session.js'
-import { parseMessageLink, fetchMessageContext, fetchMessagesDirection } from './discord/message.js'
+import { parseMessageLink, fetchMessageContext, fetchMessagesDirection, fetchGuildChannels, fetchLatestMessages } from './discord/message.js'
+import type { DiscordChannel } from './discord/message.js'
 import './types.js'
 
 // 環境変数からポート番号を取得
@@ -64,9 +65,21 @@ app.use('/*', authMiddleware)
 app.use('/', guildCheckMiddleware)
 
 // トップページ
-app.get('/', (c) => {
+app.get('/', async (c) => {
   const user = c.get('user')
   const error = c.req.query('error')
+  const session = getSession(c)
+  
+  // ギルドIDを取得
+  const guildId = process.env.REQUIRED_GUILD_ID
+  
+  // チャンネル一覧を取得
+  let channels: DiscordChannel[] = []
+  try {
+    channels = await fetchGuildChannels(guildId!)
+  } catch (error) {
+    console.error('チャンネル一覧取得エラー:', error)
+  }
   
   return c.html(`
     <!DOCTYPE html>
@@ -131,6 +144,40 @@ app.get('/', (c) => {
           color: #f44336;
           margin-bottom: 1rem;
         }
+        .form-section {
+          margin-bottom: 2rem;
+          padding: 1.5rem;
+          border: 1px solid #eee;
+          border-radius: 8px;
+          background-color: #f9f9f9;
+        }
+        .form-section h3 {
+          margin-top: 0;
+        }
+        .channel-select {
+          width: 100%;
+          padding: 0.5rem;
+          font-size: 1rem;
+          margin-bottom: 1rem;
+        }
+        .or-divider {
+          display: flex;
+          align-items: center;
+          margin: 2rem 0;
+          color: #666;
+        }
+        .or-divider::before,
+        .or-divider::after {
+          content: '';
+          flex: 1;
+          border-bottom: 1px solid #ddd;
+        }
+        .or-divider::before {
+          margin-right: 1rem;
+        }
+        .or-divider::after {
+          margin-left: 1rem;
+        }
       </style>
     </head>
     <body>
@@ -146,24 +193,44 @@ app.get('/', (c) => {
       </header>
       <main>
         <h2>メッセージを取得</h2>
-        <p>Discordのメッセージリンクを入力して、メッセージを取得します。</p>
         
         ${error ? `<p class="error-message">${error}</p>` : ''}
         
-        <form action="/fetch-message" method="post" class="message-form">
-          <div>
-            <input 
-              type="text" 
-              name="messageLink" 
-              placeholder="https://discord.com/channels/000000000000000000/000000000000000000/000000000000000000" 
-              class="message-input"
-              required
-            >
-          </div>
-          <div>
-            <button type="submit" class="submit-button">メッセージを取得</button>
-          </div>
-        </form>
+        <div class="form-section">
+          <h3>メッセージリンクから取得</h3>
+          <p>Discordのメッセージリンクを入力して、メッセージを取得します。</p>
+          <form action="/fetch-message" method="post" class="message-form">
+            <div>
+              <input 
+                type="text" 
+                name="messageLink" 
+                placeholder="https://discord.com/channels/000000000000000000/000000000000000000/000000000000000000" 
+                class="message-input"
+              >
+            </div>
+            <div>
+              <button type="submit" class="submit-button">メッセージを取得</button>
+            </div>
+          </form>
+        </div>
+        
+        <div class="or-divider">または</div>
+        
+        <div class="form-section">
+          <h3>チャンネルから最新メッセージを取得</h3>
+          <p>チャンネルを選択して、最新の10件のメッセージを取得します。</p>
+          <form action="/fetch-latest-messages" method="post" class="message-form">
+            <div>
+              <select name="channelId" class="channel-select" required>
+                <option value="">チャンネルを選択してください</option>
+                ${channels.map(channel => `<option value="${channel.id}">${escapeHtml(channel.name)}</option>`).join('')}
+              </select>
+            </div>
+            <div>
+              <button type="submit" class="submit-button">最新メッセージを取得</button>
+            </div>
+          </form>
+        </div>
       </main>
     </body>
     </html>
@@ -179,7 +246,7 @@ app.post('/fetch-message', async (c) => {
   
   const { messageLink } = await c.req.parseBody()
   
-  if (!messageLink || typeof messageLink !== 'string') {
+  if (!messageLink || typeof messageLink !== 'string' || messageLink.trim() === '') {
     return c.redirect('/?error=' + encodeURIComponent('メッセージリンクを入力してください'))
   }
   
@@ -198,6 +265,37 @@ app.post('/fetch-message', async (c) => {
     return c.redirect(`/messages/${parsedLink.channelId}/${parsedLink.messageId}`)
   } catch (error) {
     console.error('メッセージ取得エラー:', error)
+    return c.redirect('/?error=' + encodeURIComponent('メッセージの取得に失敗しました'))
+  }
+})
+
+// 最新メッセージ取得処理
+app.post('/fetch-latest-messages', async (c) => {
+  const session = getSession(c)
+  if (!session) {
+    return c.redirect('/login')
+  }
+  
+  const { channelId } = await c.req.parseBody()
+  
+  if (!channelId || typeof channelId !== 'string') {
+    return c.redirect('/?error=' + encodeURIComponent('チャンネルを選択してください'))
+  }
+  
+  try {
+    // チャンネルの最新メッセージを取得
+    const messages = await fetchLatestMessages(channelId, 10)
+    
+    if (messages.length === 0) {
+      return c.redirect('/?error=' + encodeURIComponent('チャンネルにメッセージがありません'))
+    }
+    
+    // 最新メッセージのIDを取得（配列の最後のメッセージが最新）
+    const latestMessageId = messages[messages.length - 1].id
+    
+    return c.redirect(`/messages/${channelId}/${latestMessageId}`)
+  } catch (error) {
+    console.error('最新メッセージ取得エラー:', error)
     return c.redirect('/?error=' + encodeURIComponent('メッセージの取得に失敗しました'))
   }
 })

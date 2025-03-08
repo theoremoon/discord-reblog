@@ -6,6 +6,9 @@ const DISCORD_API_URL = 'https://discord.com/api/v10'
 // Botトークン
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN
 
+// 必要なギルドID
+const REQUIRED_GUILD_ID = process.env.REQUIRED_GUILD_ID
+
 /**
  * DiscordメッセージリンクからチャンネルIDとメッセージIDを抽出する
  */
@@ -163,4 +166,65 @@ export async function fetchMessageContext(
   // 前のメッセージ + 対象メッセージ + 後のメッセージを結合して返す
   // 時系列順（古い順）に並べるため、beforeMessages（すでに逆順）、message、afterMessagesの順に結合
   return [...beforeMessages, message, ...afterMessages];
+}
+
+/**
+ * チャンネルの型定義
+ */
+export interface DiscordChannel {
+  id: string
+  name: string
+  type: number
+  guild_id: string
+  parent_id?: string
+}
+
+/**
+ * ギルドのチャンネル一覧を取得する
+ */
+export async function fetchGuildChannels(guildId: string): Promise<DiscordChannel[]> {
+  const response = await fetch(
+    `${DISCORD_API_URL}/guilds/${guildId}/channels`,
+    {
+      headers: {
+        Authorization: `Bot ${BOT_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Failed to fetch guild channels: ${error}`)
+  }
+
+  const channels = await response.json() as DiscordChannel[]
+  
+  // テキストチャンネルのみをフィルタリング (type 0 = テキストチャンネル)
+  return channels.filter(channel => channel.type === 0)
+}
+
+/**
+ * チャンネルの最新メッセージを取得する
+ */
+export async function fetchLatestMessages(channelId: string, limit: number = 10): Promise<DiscordMessage[]> {
+  const response = await fetch(
+    `${DISCORD_API_URL}/channels/${channelId}/messages?limit=${limit}`,
+    {
+      headers: {
+        Authorization: `Bot ${BOT_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Failed to fetch latest messages: ${error}`)
+  }
+
+  const messages = await response.json() as DiscordMessage[]
+  
+  // 古い順に並べ替える（APIは新しい順で返す）
+  return messages.reverse()
 }
