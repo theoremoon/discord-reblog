@@ -3,18 +3,16 @@ import type { User } from '../types.js'
 
 type HeaderProps = {
   user: User
-  showBackButton?: boolean
-  backUrl?: string
 }
 
-export const Header: FC<HeaderProps> = ({ 
-  user, 
-  showBackButton = false, 
-  backUrl = '/' 
-}) => {
+export const Header: FC<HeaderProps> = ({ user }) => {
   return (
     <header>
-      <h1>Discord Reblog</h1>
+      <h1><a href="/" style={{ textDecoration: 'none', color: 'inherit' }}>Discord Reblog</a></h1>
+      <nav className="main-nav">
+        <a href="/" className="nav-link">ホーム</a>
+        <a href="/reblog" className="nav-link">Reblogタイムライン</a>
+      </nav>
       <div className="user-info">
         {user.avatar && (
           <img 
@@ -24,12 +22,6 @@ export const Header: FC<HeaderProps> = ({
           />
         )}
         <span>{user.username}</span>
-        {showBackButton && (
-          <a href={backUrl} className="back-button">戻る</a>
-        )}
-        <a href="/reblog" style={{ marginLeft: '1rem', textDecoration: 'none', color: '#5865F2' }}>
-          Reblogタイムライン
-        </a>
         <a href="/logout" className="logout-button">ログアウト</a>
       </div>
     </header>

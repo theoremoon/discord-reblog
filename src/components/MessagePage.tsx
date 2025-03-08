@@ -22,7 +22,7 @@ export const MessagePage: FC<MessagePageProps> = ({
   return (
     <Layout title="Discord Reblog - メッセージ">
       <GlobalStyles />
-      <Header user={user} showBackButton={true} />
+      <Header user={user} />
       <main>
         <h2>メッセージ</h2>
         

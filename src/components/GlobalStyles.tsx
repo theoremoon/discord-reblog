@@ -17,6 +17,21 @@ export const GlobalStyles: FC = () => {
         padding-bottom: 1rem;
         border-bottom: 1px solid #eee;
       }
+      .main-nav {
+        display: flex;
+        gap: 1.5rem;
+      }
+      .nav-link {
+        text-decoration: none;
+        color: #5865F2;
+        font-weight: 500;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        transition: background-color 0.2s;
+      }
+      .nav-link:hover {
+        background-color: #f0f2ff;
+      }
       .user-info {
         display: flex;
         align-items: center;

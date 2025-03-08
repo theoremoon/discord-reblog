@@ -43,7 +43,7 @@ export const ReblogListPage: FC<ReblogListPageProps> = ({ user, entries, error }
   return (
     <Layout title="Discord Reblog - タイムライン">
       <GlobalStyles />
-      <Header user={user} showBackButton={true} backUrl="/" />
+      <Header user={user} />
       <main>
         <h2>Reblogタイムライン</h2>
         

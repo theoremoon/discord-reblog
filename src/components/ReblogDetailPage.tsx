@@ -26,7 +26,7 @@ export const ReblogDetailPage: FC<ReblogDetailPageProps> = ({ user, entry }) => 
   return (
     <Layout title={`${escapeHtml(entry.title)} - Discord Reblog`}>
       <GlobalStyles />
-      <Header user={user} showBackButton={true} backUrl="/reblog" />
+      <Header user={user} />
       <main>
         <div className="reblog-entry">
           <div className="reblog-header">
