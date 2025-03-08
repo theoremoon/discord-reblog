@@ -345,7 +345,10 @@ app.get('/messages/:channelId/:messageId', async (c) => {
                   <span class="message-author">${message.author.global_name || message.author.username}</span>
                   <span class="message-timestamp">${new Date(message.timestamp).toLocaleString('ja-JP')}</span>
                 </div>
-                <div class="message-content">${escapeHtml(message.content)}</div>
+                <div class="message-content">
+                  ${message.content ? escapeHtml(message.content) : '<em>メッセージ内容がありません</em>'}
+                  ${message.id === messageId ? `<div style="margin-top: 10px; font-size: 0.8rem; color: #666;">メッセージID: ${message.id}</div>` : ''}
+                </div>
                 ${message.attachments.length > 0 ? `
                   <div class="message-attachments">
                     ${message.attachments.map(attachment => `
