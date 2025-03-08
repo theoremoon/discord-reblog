@@ -1,0 +1,29 @@
+version: '3.8'
+services:
+  firestore:
+    image: google/cloud-sdk:emulators
+    ports:
+      - "8080:8080"
+      - "4000:4000"
+    command: >
+      bash -c "
+        gcloud beta emulators firestore start --host=0.0.0.0 --port=8080 --project=discord-reblog
+      "
+    environment:
+      - FIRESTORE_PROJECT_ID=discord-reblog
+    volumes:
+      - firestore_data:/opt/data
+
+  firestore-ui:
+    image: andreysenov/firebase-tools
+    ports:
+      - "4000:4000"
+    command: >
+      firebase emulators:start --only firestore --project discord-reblog --no-emulator-ui-import --no-emulator-ui-export
+    environment:
+      - FIRESTORE_EMULATOR_HOST=firestore:8080
+    depends_on:
+      - firestore
+
+volumes:
+  firestore_data:

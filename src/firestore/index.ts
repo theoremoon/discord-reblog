@@ -18,6 +18,13 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig)
 const db = getFirestore(app)
 
+// 開発環境の場合はエミュレータに接続
+if (process.env.NODE_ENV === 'development' || process.env.USE_FIREBASE_EMULATOR === 'true') {
+  const { connectFirestoreEmulator } = require('firebase/firestore')
+  connectFirestoreEmulator(db, 'localhost', 8080)
+  console.log('Using Firestore emulator on localhost:8080')
+}
+
 // Reblogエントリの型定義
 export interface ReblogEntry {
   id?: string

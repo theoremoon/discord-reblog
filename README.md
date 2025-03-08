@@ -53,14 +53,44 @@ cp .env.example .env
 
 ### 実行
 
+#### 実際のFirestoreを使用する場合
+
 ```bash
 # 開発サーバーの起動
 pnpm run dev
 ```
 
+#### Firestoreエミュレータを使用する場合
+
+##### Firebase CLIを使用する場合（Javaが必要）
+
+```bash
+# 別のターミナルでFirestoreエミュレータを起動
+pnpm run emulators
+
+# エミュレータを使用して開発サーバーを起動
+pnpm run dev:emulator
+```
+
+##### Dockerを使用する場合（推奨）
+
+```bash
+# 別のターミナルでDockerコンテナを起動
+pnpm run emulators:docker
+
+# エミュレータを使用して開発サーバーを起動
+pnpm run dev:emulator
+
+# 終了時にDockerコンテナを停止
+pnpm run emulators:docker:stop
+```
+
 ```bash
 # ブラウザでアクセス
 open http://localhost:3000
+
+# Firestoreエミュレータのダッシュボード
+open http://localhost:4000
 ```
 
 ## 使い方
