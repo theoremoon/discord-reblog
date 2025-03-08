@@ -14,19 +14,19 @@ describe('Discord OAuth2認証', () => {
     
     // getAuthUrlのモックを各テストの前に設定
     vi.spyOn(discordModule, 'getAuthUrl').mockReturnValue(
-      'https://discord.com/api/oauth2/authorize?client_id=mock-client-id&redirect_uri=http%3A%2F%2Flocalhost%3A5137%2Foauth%2Fcallback&response_type=code&scope=identify'
+      'https://discord.com/api/oauth2/authorize?client_id=mock-client-id&redirect_uri=http%3A%2F%2Flocalhost%3A5137%2Foauth%2Fcallback&response_type=code&scope=identify%20guilds'
     )
   })
   
   it('認証URLを生成できること', () => {
     // モックされたURLを使用
-    const mockUrl = 'https://discord.com/api/oauth2/authorize?client_id=mock-client-id&redirect_uri=http%3A%2F%2Flocalhost%3A5137%2Foauth%2Fcallback&response_type=code&scope=identify'
+    const mockUrl = 'https://discord.com/api/oauth2/authorize?client_id=mock-client-id&redirect_uri=http%3A%2F%2Flocalhost%3A5137%2Foauth%2Fcallback&response_type=code&scope=identify%20guilds'
     
     expect(mockUrl).toContain('https://discord.com/api/oauth2/authorize')
     expect(mockUrl).toContain('client_id=mock-client-id')
     expect(mockUrl).toContain('redirect_uri=http%3A%2F%2Flocalhost%3A5137%2Foauth%2Fcallback')
     expect(mockUrl).toContain('response_type=code')
-    expect(mockUrl).toContain('scope=identify')
+    expect(mockUrl).toContain('scope=identify%20guilds')
   })
   
   it('コールバック処理が成功すること', async () => {
@@ -38,7 +38,7 @@ describe('Discord OAuth2認証', () => {
         token_type: 'Bearer',
         expires_in: 604800,
         refresh_token: 'mock-refresh-token',
-        scope: 'identify'
+        scope: 'identify guilds'
       })
     }
     
@@ -51,8 +51,17 @@ describe('Discord OAuth2認証', () => {
       })
     }
     
+    const mockGuildsResponse = {
+      ok: true,
+      json: vi.fn().mockResolvedValue([
+        { id: 'guild-id-1', name: 'Guild 1' },
+        { id: 'guild-id-2', name: 'Guild 2' }
+      ])
+    }
+    
     vi.mocked(fetch).mockResolvedValueOnce(mockTokenResponse as any)
     vi.mocked(fetch).mockResolvedValueOnce(mockUserResponse as any)
+    vi.mocked(fetch).mockResolvedValueOnce(mockGuildsResponse as any)
     
     // createSessionのモック
     vi.spyOn(sessionModule, 'createSession').mockImplementation(vi.fn())
@@ -81,6 +90,16 @@ describe('Discord OAuth2認証', () => {
       })
     )
     
+    // ギルド情報取得リクエストの検証
+    expect(fetch).toHaveBeenCalledWith(
+      'https://discord.com/api/v10/users/@me/guilds',
+      expect.objectContaining({
+        headers: {
+          Authorization: 'Bearer mock-access-token'
+        }
+      })
+    )
+    
     // セッション作成の検証
     expect(sessionModule.createSession).toHaveBeenCalledWith(
       mockContext,
@@ -88,7 +107,8 @@ describe('Discord OAuth2認証', () => {
         userId: 'mock-user-id',
         username: 'mock-username',
         avatar: 'mock-avatar',
-        accessToken: 'mock-access-token'
+        accessToken: 'mock-access-token',
+        guildIds: ['guild-id-1', 'guild-id-2']
       }
     )
   })

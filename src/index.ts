@@ -1,7 +1,7 @@
 import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { logger } from 'hono/logger'
-import { authMiddleware, renderLoginPage } from './auth/middleware.js'
+import { authMiddleware, guildCheckMiddleware, renderLoginPage, renderGuildErrorPage } from './auth/middleware.js'
 import { handleCallback } from './auth/discord.js'
 import { deleteSession, getSession } from './utils/session.js'
 import './types.js'
@@ -49,9 +49,18 @@ app.get('/oauth/callback', async (c) => {
   }
 })
 
+// ギルドエラーページ
+app.get('/guild-error', (c) => {
+  return renderGuildErrorPage(c)
+})
+
 // 認証が必要なルート
 // すべてのルートに認証ミドルウェアを適用
 app.use('/*', authMiddleware)
+
+// ギルドチェックが必要なルート
+// 保護されたルートにギルドチェックミドルウェアを適用
+app.use('/', guildCheckMiddleware)
 
 // トップページ
 app.get('/', (c) => {

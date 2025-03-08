@@ -13,7 +13,7 @@ const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET
 const REDIRECT_URI = process.env.REDIRECT_URI
 
 // スコープ
-const SCOPES = ['identify'].join(' ')
+const SCOPES = ['identify', 'guilds'].join(' ')
 
 /**
  * Discord OAuth2認証URLを生成する
@@ -86,6 +86,25 @@ async function getUserInfo(accessToken: string): Promise<{
 }
 
 /**
+ * ユーザーのギルド（サーバー）一覧を取得する
+ */
+async function getUserGuilds(accessToken: string): Promise<string[]> {
+  const response = await fetch(`${DISCORD_API_URL}/users/@me/guilds`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
+  })
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Failed to get user guilds: ${error}`)
+  }
+
+  const guilds = await response.json() as Array<{ id: string }>;
+  return guilds.map(guild => guild.id);
+}
+
+/**
  * OAuth2コールバック処理
  */
 export async function handleCallback(c: Context, code: string): Promise<void> {
@@ -96,12 +115,16 @@ export async function handleCallback(c: Context, code: string): Promise<void> {
     // ユーザー情報を取得
     const userData = await getUserInfo(tokenData.access_token)
     
+    // ユーザーのギルド一覧を取得
+    const guildIds = await getUserGuilds(tokenData.access_token)
+    
     // セッションを作成
     createSession(c, {
       userId: userData.id,
       username: userData.username,
       avatar: userData.avatar,
-      accessToken: tokenData.access_token
+      accessToken: tokenData.access_token,
+      guildIds
     })
   } catch (error) {
     console.error('OAuth callback error:', error)

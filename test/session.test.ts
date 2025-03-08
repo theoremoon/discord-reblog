@@ -44,7 +44,8 @@ describe('セッション管理', () => {
       userId: 'user123',
       username: 'testuser',
       avatar: 'avatar123',
-      accessToken: 'token123'
+      accessToken: 'token123',
+      guildIds: ['guild123', 'guild456']
     }
     
     createSession(mockContext as any, sessionData)
@@ -68,7 +69,8 @@ describe('セッション管理', () => {
       username: 'testuser',
       avatar: 'avatar123',
       accessToken: 'token123',
-      expiresAt: 1000 + 24 * 60 * 60 * 1000
+      expiresAt: 1000 + 24 * 60 * 60 * 1000,
+      guildIds: ['guild123', 'guild456']
     }
     
     mockContext.cookies['discord_session'] = JSON.stringify(sessionData)
@@ -84,7 +86,8 @@ describe('セッション管理', () => {
       username: 'testuser',
       avatar: 'avatar123',
       accessToken: 'token123',
-      expiresAt: 500 // 現在時刻より前
+      expiresAt: 500, // 現在時刻より前
+      guildIds: ['guild123']
     }
     
     mockContext.cookies['discord_session'] = JSON.stringify(sessionData)

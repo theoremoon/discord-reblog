@@ -8,6 +8,7 @@ export interface Session {
   avatar?: string
   accessToken: string
   expiresAt: number
+  guildIds: string[]
 }
 
 // セッションキー
