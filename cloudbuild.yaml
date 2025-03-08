@@ -48,3 +48,6 @@ images:
 
 # タイムアウト設定
 timeout: 1800s
+
+options:
+  logging: CLOUD_LOGGING_ONLY
