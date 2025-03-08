@@ -87,6 +87,53 @@ export async function fetchMessage(
 }
 
 /**
+ * 特定の方向のメッセージを取得する
+ */
+export async function fetchMessagesDirection(
+  channelId: string,
+  referenceId: string,
+  direction: 'before' | 'after',
+  limit: number = 5,
+  beforeId?: string,
+  afterId?: string
+): Promise<DiscordMessage[]> {
+  let url = `${DISCORD_API_URL}/channels/${channelId}/messages?`;
+  
+  if (direction === 'before') {
+    // 前のメッセージを取得
+    url += `before=${beforeId || referenceId}&limit=${limit}`;
+  } else {
+    // 後のメッセージを取得
+    url += `after=${afterId || referenceId}&limit=${limit}`;
+  }
+  
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bot ${BOT_TOKEN}`,
+      'Content-Type': 'application/json'
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch messages ${direction}: ${await response.text()}`);
+  }
+
+  const messages = await response.json() as DiscordMessage[];
+  
+  // 前のメッセージは新しい順に取得されるので、古い順に並べ替える
+  if (direction === 'before') {
+    return messages.reverse();
+  }
+  
+  // 後のメッセージも新しい順に取得されるので、古い順に並べ替える
+  if (direction === 'after') {
+    return messages.reverse();
+  }
+  
+  return messages;
+}
+
+/**
  * メッセージの前後のメッセージを取得する
  */
 export async function fetchMessageContext(
@@ -95,45 +142,25 @@ export async function fetchMessageContext(
   limit: number = 5
 ): Promise<DiscordMessage[]> {
   // メッセージの前のメッセージを取得
-  const beforeResponse = await fetch(
-    `${DISCORD_API_URL}/channels/${channelId}/messages?before=${messageId}&limit=${limit}`,
-    {
-      headers: {
-        Authorization: `Bot ${BOT_TOKEN}`,
-        'Content-Type': 'application/json'
-      }
-    }
-  )
-
-  if (!beforeResponse.ok) {
-    throw new Error(`Failed to fetch messages before: ${await beforeResponse.text()}`)
-  }
-
-  const beforeMessages = await beforeResponse.json() as DiscordMessage[]
+  const beforeMessages = await fetchMessagesDirection(
+    channelId,
+    messageId,
+    'before',
+    limit
+  );
 
   // メッセージ自体を取得
-  const message = await fetchMessage(channelId, messageId)
+  const message = await fetchMessage(channelId, messageId);
 
   // メッセージの後のメッセージを取得
-  const afterResponse = await fetch(
-    `${DISCORD_API_URL}/channels/${channelId}/messages?after=${messageId}&limit=${limit}`,
-    {
-      headers: {
-        Authorization: `Bot ${BOT_TOKEN}`,
-        'Content-Type': 'application/json'
-      }
-    }
-  )
-
-  if (!afterResponse.ok) {
-    throw new Error(`Failed to fetch messages after: ${await afterResponse.text()}`)
-  }
-
-  const afterMessages = await afterResponse.json() as DiscordMessage[]
+  const afterMessages = await fetchMessagesDirection(
+    channelId,
+    messageId,
+    'after',
+    limit
+  );
 
   // 前のメッセージ + 対象メッセージ + 後のメッセージを結合して返す
-  // 前のメッセージは新しい順に取得されるので、逆順にする
-  // 後のメッセージは古い順に取得されるので、そのままでOK
-  // 時系列順（古い順）に並べるため、beforeMessages（逆順）、message、afterMessagesの順に結合
-  return [...beforeMessages.reverse(), message, ...afterMessages.reverse()]
+  // 時系列順（古い順）に並べるため、beforeMessages（すでに逆順）、message、afterMessagesの順に結合
+  return [...beforeMessages, message, ...afterMessages];
 }

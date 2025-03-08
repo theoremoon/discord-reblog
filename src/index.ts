@@ -4,7 +4,7 @@ import { logger } from 'hono/logger'
 import { authMiddleware, guildCheckMiddleware, renderLoginPage, renderGuildErrorPage } from './auth/middleware.js'
 import { handleCallback } from './auth/discord.js'
 import { deleteSession, getSession } from './utils/session.js'
-import { parseMessageLink, fetchMessageContext } from './discord/message.js'
+import { parseMessageLink, fetchMessageContext, fetchMessagesDirection } from './discord/message.js'
 import './types.js'
 
 // 環境変数からポート番号を取得
@@ -202,6 +202,63 @@ app.post('/fetch-message', async (c) => {
   }
 })
 
+// 前のメッセージを取得するAPI
+app.get('/api/messages/:channelId/:messageId/before', async (c) => {
+  const session = getSession(c)
+  if (!session) {
+    return c.json({ error: 'Unauthorized' }, 401)
+  }
+  
+  const channelId = c.req.param('channelId')
+  const messageId = c.req.param('messageId')
+  const beforeId = c.req.query('before_id') || messageId
+  const limit = parseInt(c.req.query('limit') || '5', 10)
+  
+  try {
+    const messages = await fetchMessagesDirection(
+      channelId,
+      messageId,
+      'before',
+      limit,
+      beforeId
+    )
+    
+    return c.json({ messages })
+  } catch (error) {
+    console.error('メッセージ取得エラー:', error)
+    return c.json({ error: 'Failed to fetch messages' }, 500)
+  }
+})
+
+// 後のメッセージを取得するAPI
+app.get('/api/messages/:channelId/:messageId/after', async (c) => {
+  const session = getSession(c)
+  if (!session) {
+    return c.json({ error: 'Unauthorized' }, 401)
+  }
+  
+  const channelId = c.req.param('channelId')
+  const messageId = c.req.param('messageId')
+  const afterId = c.req.query('after_id') || messageId
+  const limit = parseInt(c.req.query('limit') || '5', 10)
+  
+  try {
+    const messages = await fetchMessagesDirection(
+      channelId,
+      messageId,
+      'after',
+      limit,
+      undefined,
+      afterId
+    )
+    
+    return c.json({ messages })
+  } catch (error) {
+    console.error('メッセージ取得エラー:', error)
+    return c.json({ error: 'Failed to fetch messages' }, 500)
+  }
+})
+
 // メッセージ表示ページ
 app.get('/messages/:channelId/:messageId', async (c) => {
   const session = getSession(c)
@@ -319,6 +376,29 @@ app.get('/messages/:channelId/:messageId', async (c) => {
             max-height: 300px;
             border-radius: 4px;
           }
+          .load-more-container {
+            text-align: center;
+            margin: 1rem 0;
+          }
+          .load-more-button {
+            background-color: #5865F2;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+          }
+          .load-more-button:hover {
+            background-color: #4752C4;
+          }
+          .load-more-button:disabled {
+            background-color: #99A0E8;
+            cursor: not-allowed;
+          }
+          .loading-indicator {
+            margin-top: 0.5rem;
+            color: #666;
+          }
         </style>
       </head>
       <body>
@@ -335,9 +415,15 @@ app.get('/messages/:channelId/:messageId', async (c) => {
         </header>
         <main>
           <h2>メッセージ</h2>
-          <div class="message-container">
+          
+          <div class="load-more-container top">
+            <button id="loadMoreBefore" class="load-more-button">過去のメッセージをもっと読み込む</button>
+            <div id="loadingBefore" class="loading-indicator" style="display: none;">読み込み中...</div>
+          </div>
+          
+          <div class="message-container" id="messageContainer">
             ${messages.map(message => `
-              <div class="message ${message.id === messageId ? 'highlight' : ''}">
+              <div class="message ${message.id === messageId ? 'highlight' : ''}" data-message-id="${message.id}">
                 <div class="message-header">
                   ${message.author.avatar 
                     ? `<img src="https://cdn.discordapp.com/avatars/${message.author.id}/${message.author.avatar}.png" alt="Avatar" class="message-avatar">` 
@@ -364,7 +450,165 @@ app.get('/messages/:channelId/:messageId', async (c) => {
               </div>
             `).join('')}
           </div>
+          
+          <div class="load-more-container bottom">
+            <button id="loadMoreAfter" class="load-more-button">新しいメッセージをもっと読み込む</button>
+            <div id="loadingAfter" class="loading-indicator" style="display: none;">読み込み中...</div>
+          </div>
         </main>
+        
+        <script>
+          // メッセージの継ぎ足し読み込み用のJavaScript
+          document.addEventListener('DOMContentLoaded', () => {
+            const messageContainer = document.getElementById('messageContainer');
+            const loadMoreBefore = document.getElementById('loadMoreBefore');
+            const loadMoreAfter = document.getElementById('loadMoreAfter');
+            const loadingBefore = document.getElementById('loadingBefore');
+            const loadingAfter = document.getElementById('loadingAfter');
+            
+            // チャンネルIDとメッセージIDを取得
+            const channelId = '${channelId}';
+            const messageId = '${messageId}';
+            
+            // 最初と最後のメッセージIDを追跡
+            let firstMessageId = '';
+            let lastMessageId = '';
+            
+            // 初期化時に最初と最後のメッセージIDを設定
+            function initializeMessageIds() {
+              const messages = document.querySelectorAll('.message');
+              if (messages.length > 0) {
+                firstMessageId = messages[0].getAttribute('data-message-id');
+                lastMessageId = messages[messages.length - 1].getAttribute('data-message-id');
+              }
+            }
+            
+            // 過去のメッセージを読み込む
+            async function loadMessagesBefore() {
+              if (!firstMessageId) return;
+              
+              loadingBefore.style.display = 'block';
+              loadMoreBefore.disabled = true;
+              
+              try {
+                const response = await fetch(\`/api/messages/\${channelId}/\${messageId}/before?before_id=\${firstMessageId}\`);
+                const data = await response.json();
+                
+                if (data.messages && data.messages.length > 0) {
+                  // 新しいメッセージをHTMLに変換
+                  const messagesHtml = data.messages.map(message => createMessageHtml(message)).join('');
+                  
+                  // メッセージコンテナの先頭に追加
+                  messageContainer.insertAdjacentHTML('afterbegin', messagesHtml);
+                  
+                  // 最初のメッセージIDを更新
+                  firstMessageId = data.messages[0].id;
+                  
+                  // メッセージが少ない場合はボタンを非表示
+                  if (data.messages.length < 5) {
+                    loadMoreBefore.style.display = 'none';
+                  }
+                } else {
+                  // これ以上メッセージがない場合はボタンを非表示
+                  loadMoreBefore.style.display = 'none';
+                }
+              } catch (error) {
+                console.error('メッセージ読み込みエラー:', error);
+                alert('メッセージの読み込みに失敗しました');
+              } finally {
+                loadingBefore.style.display = 'none';
+                loadMoreBefore.disabled = false;
+              }
+            }
+            
+            // 新しいメッセージを読み込む
+            async function loadMessagesAfter() {
+              if (!lastMessageId) return;
+              
+              loadingAfter.style.display = 'block';
+              loadMoreAfter.disabled = true;
+              
+              try {
+                const response = await fetch(\`/api/messages/\${channelId}/\${messageId}/after?after_id=\${lastMessageId}\`);
+                const data = await response.json();
+                
+                if (data.messages && data.messages.length > 0) {
+                  // 新しいメッセージをHTMLに変換
+                  const messagesHtml = data.messages.map(message => createMessageHtml(message)).join('');
+                  
+                  // メッセージコンテナの末尾に追加
+                  messageContainer.insertAdjacentHTML('beforeend', messagesHtml);
+                  
+                  // 最後のメッセージIDを更新
+                  lastMessageId = data.messages[data.messages.length - 1].id;
+                  
+                  // メッセージが少ない場合はボタンを非表示
+                  if (data.messages.length < 5) {
+                    loadMoreAfter.style.display = 'none';
+                  }
+                } else {
+                  // これ以上メッセージがない場合はボタンを非表示
+                  loadMoreAfter.style.display = 'none';
+                }
+              } catch (error) {
+                console.error('メッセージ読み込みエラー:', error);
+                alert('メッセージの読み込みに失敗しました');
+              } finally {
+                loadingAfter.style.display = 'none';
+                loadMoreAfter.disabled = false;
+              }
+            }
+            
+            // メッセージHTMLを生成する関数
+            function createMessageHtml(message) {
+              return \`
+                <div class="message \${message.id === messageId ? 'highlight' : ''}" data-message-id="\${message.id}">
+                  <div class="message-header">
+                    \${message.author.avatar 
+                      ? \`<img src="https://cdn.discordapp.com/avatars/\${message.author.id}/\${message.author.avatar}.png" alt="Avatar" class="message-avatar">\` 
+                      : ''}
+                    <span class="message-author">\${message.author.global_name || message.author.username}</span>
+                    <span class="message-timestamp">\${new Date(message.timestamp).toLocaleString('ja-JP')}</span>
+                  </div>
+                  <div class="message-content">
+                    \${message.content ? escapeHtml(message.content) : '<em>メッセージ内容がありません</em>'}
+                    \${message.id === messageId ? \`<div style="margin-top: 10px; font-size: 0.8rem; color: #666;">メッセージID: \${message.id}</div>\` : ''}
+                  </div>
+                  \${message.attachments.length > 0 ? \`
+                    <div class="message-attachments">
+                      \${message.attachments.map(attachment => \`
+                        <div class="message-attachment">
+                          \${attachment.content_type?.startsWith('image/') 
+                            ? \`<img src="\${attachment.url}" alt="\${attachment.filename}">\`
+                            : \`<a href="\${attachment.url}" target="_blank">\${attachment.filename}</a>\`
+                          }
+                        </div>
+                      \`).join('')}
+                    </div>
+                  \` : ''}
+                </div>
+              \`;
+            }
+            
+            // HTMLエスケープ関数（サーバー側と同じ実装）
+            function escapeHtml(text) {
+              return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;')
+                .replace(/\\n/g, '<br>');
+            }
+            
+            // イベントリスナーを設定
+            loadMoreBefore.addEventListener('click', loadMessagesBefore);
+            loadMoreAfter.addEventListener('click', loadMessagesAfter);
+            
+            // 初期化
+            initializeMessageIds();
+          });
+        </script>
       </body>
       </html>
     `)
