@@ -22,7 +22,7 @@ resource "google_cloud_run_v2_service" "discord_reblog" {
       
       env {
         name  = "REDIRECT_URI"
-        value = "https://${var.domain}/auth/callback"
+        value = "https://${var.domain}/oauth/callback"
       }
       
       # 環境変数の設定（非秘匿情報）
