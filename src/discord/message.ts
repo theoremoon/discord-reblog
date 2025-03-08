@@ -38,6 +38,24 @@ export function parseMessageLink(link: string): { guildId: string, channelId: st
 }
 
 /**
+ * Discordリアクションの型定義
+ */
+export interface DiscordReaction {
+  emoji: {
+    id: string | null
+    name: string
+    animated?: boolean
+  }
+  count: number
+  users: Array<{
+    id: string
+    username: string
+    avatar?: string
+    global_name?: string
+  }>
+}
+
+/**
  * Discordメッセージの型定義
  */
 export interface DiscordMessage {
@@ -62,14 +80,72 @@ export interface DiscordMessage {
   }>
   embeds: Array<any>
   referenced_message?: DiscordMessage
+  reactions?: DiscordReaction[]
 }
 
 /**
- * Discordメッセージを取得する
+ * メッセージのリアクションを取得する
+ */
+export async function fetchMessageReactions(
+  channelId: string,
+  messageId: string,
+  emoji?: string
+): Promise<DiscordReaction[]> {
+  let url = `${DISCORD_API_URL}/channels/${channelId}/messages/${messageId}/reactions`;
+  
+  // 特定の絵文字のリアクションを取得する場合
+  if (emoji) {
+    url += `/${encodeURIComponent(emoji)}`;
+  }
+  
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bot ${BOT_TOKEN}`,
+      'Content-Type': 'application/json'
+    }
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to fetch message reactions: ${error}`);
+  }
+
+  // APIからのレスポンスを整形
+  const reactionsData = await response.json();
+  
+  // 絵文字ごとにグループ化
+  const groupedReactions: Record<string, DiscordReaction> = {};
+  
+  for (const user of reactionsData) {
+    const emojiKey = user.emoji.id ? `${user.emoji.name}:${user.emoji.id}` : user.emoji.name;
+    
+    if (!groupedReactions[emojiKey]) {
+      groupedReactions[emojiKey] = {
+        emoji: user.emoji,
+        count: 0,
+        users: []
+      };
+    }
+    
+    groupedReactions[emojiKey].count++;
+    groupedReactions[emojiKey].users.push({
+      id: user.id,
+      username: user.username,
+      avatar: user.avatar,
+      global_name: user.global_name
+    });
+  }
+  
+  return Object.values(groupedReactions);
+}
+
+/**
+ * Discordメッセージを取得する（リアクション情報も含む）
  */
 export async function fetchMessage(
   channelId: string, 
-  messageId: string
+  messageId: string,
+  includeReactions: boolean = true
 ): Promise<DiscordMessage> {
   const response = await fetch(
     `${DISCORD_API_URL}/channels/${channelId}/messages/${messageId}`,
@@ -86,7 +162,20 @@ export async function fetchMessage(
     throw new Error(`Failed to fetch message: ${error}`)
   }
 
-  return response.json()
+  const message = await response.json() as DiscordMessage;
+  
+  // リアクション情報を取得
+  if (includeReactions && message.reactions) {
+    try {
+      const reactions = await fetchMessageReactions(channelId, messageId);
+      message.reactions = reactions;
+    } catch (error) {
+      console.error('リアクション取得エラー:', error);
+      // リアクション取得に失敗してもメッセージ自体は返す
+    }
+  }
+
+  return message;
 }
 
 /**

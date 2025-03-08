@@ -4,8 +4,10 @@ import { logger } from 'hono/logger'
 import { authMiddleware, guildCheckMiddleware, renderLoginPage, renderGuildErrorPage } from './auth/middleware.js'
 import { handleCallback } from './auth/discord.js'
 import { deleteSession, getSession } from './utils/session.js'
-import { parseMessageLink, fetchMessageContext, fetchMessagesDirection, fetchGuildChannels, fetchLatestMessages } from './discord/message.js'
-import type { DiscordChannel } from './discord/message.js'
+import { parseMessageLink, fetchMessageContext, fetchMessagesDirection, fetchGuildChannels, fetchLatestMessages, fetchMessage } from './discord/message.js'
+import type { DiscordChannel, DiscordMessage } from './discord/message.js'
+import { getReblogEntries } from './firestore/index.js'
+import { createReblogEntry, renderMessageHtml } from './reblog/index.js'
 import './types.js'
 
 // 環境変数からポート番号を取得
@@ -188,6 +190,7 @@ app.get('/', async (c) => {
             ? `<img src="https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png" alt="Avatar" class="user-avatar">` 
             : ''}
           <span>${user.username}</span>
+          <a href="/reblog" style="margin-left: 1rem; text-decoration: none; color: #5865F2;">Reblogタイムライン</a>
           <a href="/logout" class="logout-button" style="margin-left: 1rem;">ログアウト</a>
         </div>
       </header>
@@ -408,7 +411,7 @@ app.get('/messages/:channelId/:messageId', async (c) => {
             border-radius: 50%;
             margin-right: 1rem;
           }
-          .logout-button, .back-button {
+          .logout-button, .back-button, .reblog-button {
             background-color: #5865F2;
             color: white;
             border: none;
@@ -421,6 +424,13 @@ app.get('/messages/:channelId/:messageId', async (c) => {
           .logout-button {
             background-color: #f44336;
           }
+          .reblog-button {
+            background-color: #43b581;
+          }
+          .reblog-button:disabled {
+            background-color: #a0d8bc;
+            cursor: not-allowed;
+          }
           .message-container {
             background-color: white;
             border-radius: 8px;
@@ -431,6 +441,7 @@ app.get('/messages/:channelId/:messageId', async (c) => {
           .message {
             padding: 1rem;
             border-bottom: 1px solid #eee;
+            position: relative;
           }
           .message:last-child {
             border-bottom: none;
@@ -438,6 +449,14 @@ app.get('/messages/:channelId/:messageId', async (c) => {
           .message.highlight {
             background-color: #f0f7ff;
             border-left: 4px solid #5865F2;
+          }
+          .message.selected {
+            background-color: #e3f2fd;
+          }
+          .message-checkbox {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
           }
           .message-header {
             display: flex;
@@ -474,6 +493,30 @@ app.get('/messages/:channelId/:messageId', async (c) => {
             max-height: 300px;
             border-radius: 4px;
           }
+          .message-reactions {
+            display: flex;
+            flex-wrap: wrap;
+            margin-top: 0.5rem;
+          }
+          .reaction {
+            display: flex;
+            align-items: center;
+            background-color: #f2f3f5;
+            border-radius: 4px;
+            padding: 0.25rem 0.5rem;
+            margin-right: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+          }
+          .reaction .emoji {
+            width: 20px;
+            height: 20px;
+            margin-right: 0.25rem;
+          }
+          .reaction-count {
+            color: #666;
+            margin-left: 0.25rem;
+          }
           .load-more-container {
             text-align: center;
             margin: 1rem 0;
@@ -497,6 +540,77 @@ app.get('/messages/:channelId/:messageId', async (c) => {
             margin-top: 0.5rem;
             color: #666;
           }
+          .reblog-form-container {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+          }
+          .reblog-form {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            padding: 2rem;
+            width: 80%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+          }
+          .reblog-form h3 {
+            margin-top: 0;
+          }
+          .form-group {
+            margin-bottom: 1rem;
+          }
+          .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+          }
+          .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+          }
+          .form-group textarea {
+            min-height: 100px;
+          }
+          .form-buttons {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 1rem;
+          }
+          .form-buttons button {
+            margin-left: 0.5rem;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+          }
+          .cancel-button {
+            background-color: #f2f3f5;
+            color: #333;
+          }
+          .submit-button {
+            background-color: #43b581;
+            color: white;
+          }
+          .selected-messages {
+            margin-top: 1rem;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 0.5rem;
+          }
         </style>
       </head>
       <body>
@@ -519,9 +633,15 @@ app.get('/messages/:channelId/:messageId', async (c) => {
             <div id="loadingBefore" class="loading-indicator" style="display: none;">読み込み中...</div>
           </div>
           
+          <div class="actions-container" style="margin-bottom: 1rem;">
+            <button id="reblogButton" class="reblog-button" disabled>選択したメッセージをReblog</button>
+            <span id="selectedCount" style="margin-left: 1rem; color: #666;">0件選択中</span>
+          </div>
+          
           <div class="message-container" id="messageContainer">
             ${messages.map(message => `
               <div class="message ${message.id === messageId ? 'highlight' : ''}" data-message-id="${message.id}">
+                <input type="checkbox" class="message-checkbox" data-message-id="${message.id}">
                 <div class="message-header">
                   ${message.author.avatar 
                     ? `<img src="https://cdn.discordapp.com/avatars/${message.author.id}/${message.author.avatar}.png" alt="Avatar" class="message-avatar">` 
@@ -545,8 +665,51 @@ app.get('/messages/:channelId/:messageId', async (c) => {
                     `).join('')}
                   </div>
                 ` : ''}
+                ${message.reactions && message.reactions.length > 0 ? `
+                  <div class="message-reactions">
+                    ${message.reactions.map(reaction => {
+                      // カスタム絵文字かどうかで表示を分ける
+                      const emojiHtml = reaction.emoji.id
+                        ? `<img class="emoji" src="https://cdn.discordapp.com/emojis/${reaction.emoji.id}.png" alt="${reaction.emoji.name}">`
+                        : reaction.emoji.name;
+                      
+                      return `
+                        <div class="reaction" title="${reaction.count}人がリアクション">
+                          ${emojiHtml} <span class="reaction-count">${reaction.count}</span>
+                        </div>
+                      `;
+                    }).join('')}
+                  </div>
+                ` : ''}
               </div>
             `).join('')}
+          </div>
+          
+          <!-- Reblogフォーム -->
+          <div class="reblog-form-container" id="reblogFormContainer">
+            <div class="reblog-form">
+              <h3>Reblogエントリの作成</h3>
+              <form id="reblogForm" action="/create-reblog" method="post">
+                <div class="form-group">
+                  <label for="title">タイトル</label>
+                  <input type="text" id="title" name="title" required>
+                </div>
+                <div class="form-group">
+                  <label for="description">説明</label>
+                  <textarea id="description" name="description"></textarea>
+                </div>
+                <div class="form-group">
+                  <label>選択したメッセージ</label>
+                  <div class="selected-messages" id="selectedMessages"></div>
+                  <input type="hidden" id="messageIds" name="messageIds">
+                  <input type="hidden" id="channelId" name="channelId" value="${channelId}">
+                </div>
+                <div class="form-buttons">
+                  <button type="button" class="cancel-button" id="cancelButton">キャンセル</button>
+                  <button type="submit" class="submit-button">保存</button>
+                </div>
+              </form>
+            </div>
           </div>
           
           <div class="load-more-container bottom">
@@ -563,10 +726,20 @@ app.get('/messages/:channelId/:messageId', async (c) => {
             const loadMoreAfter = document.getElementById('loadMoreAfter');
             const loadingBefore = document.getElementById('loadingBefore');
             const loadingAfter = document.getElementById('loadingAfter');
+            const reblogButton = document.getElementById('reblogButton');
+            const selectedCount = document.getElementById('selectedCount');
+            const reblogFormContainer = document.getElementById('reblogFormContainer');
+            const cancelButton = document.getElementById('cancelButton');
+            const reblogForm = document.getElementById('reblogForm');
+            const messageIdsInput = document.getElementById('messageIds');
+            const selectedMessagesContainer = document.getElementById('selectedMessages');
             
             // チャンネルIDとメッセージIDを取得
             const channelId = '${channelId}';
             const messageId = '${messageId}';
+            
+            // 選択されたメッセージを追跡
+            const selectedMessages = new Set();
             
             // 最初と最後のメッセージIDを追跡
             let firstMessageId = '';
@@ -580,6 +753,115 @@ app.get('/messages/:channelId/:messageId', async (c) => {
                 lastMessageId = messages[messages.length - 1].getAttribute('data-message-id');
               }
             }
+            
+            // メッセージ選択の処理
+            function setupMessageSelection() {
+              // 既存のチェックボックスにイベントリスナーを設定
+              document.querySelectorAll('.message-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', handleCheckboxChange);
+              });
+              
+              // メッセージクリックでもチェックボックスを切り替え
+              document.querySelectorAll('.message').forEach(message => {
+                message.addEventListener('click', (event) => {
+                  // チェックボックス自体のクリックは除外
+                  if (event.target.classList.contains('message-checkbox')) {
+                    return;
+                  }
+                  
+                  // メッセージ内のリンクやボタンのクリックは除外
+                  if (event.target.tagName === 'A' || event.target.tagName === 'BUTTON' || 
+                      event.target.closest('a') || event.target.closest('button')) {
+                    return;
+                  }
+                  
+                  const messageId = message.getAttribute('data-message-id');
+                  const checkbox = message.querySelector('.message-checkbox');
+                  checkbox.checked = !checkbox.checked;
+                  
+                  // チェックボックスの変更イベントを発火
+                  const changeEvent = new Event('change');
+                  checkbox.dispatchEvent(changeEvent);
+                });
+              });
+            }
+            
+            // チェックボックスの変更イベントハンドラ
+            function handleCheckboxChange(event) {
+              const checkbox = event.target;
+              const messageId = checkbox.getAttribute('data-message-id');
+              const messageElement = checkbox.closest('.message');
+              
+              if (checkbox.checked) {
+                selectedMessages.add(messageId);
+                messageElement.classList.add('selected');
+              } else {
+                selectedMessages.delete(messageId);
+                messageElement.classList.remove('selected');
+              }
+              
+              // 選択数を更新
+              selectedCount.textContent = \`\${selectedMessages.size}件選択中\`;
+              
+              // Reblogボタンの有効/無効を切り替え
+              reblogButton.disabled = selectedMessages.size === 0;
+            }
+            
+            // Reblogボタンのクリックイベント
+            reblogButton.addEventListener('click', () => {
+              if (selectedMessages.size === 0) return;
+              
+              // 選択されたメッセージIDをフォームに設定
+              messageIdsInput.value = Array.from(selectedMessages).join(',');
+              
+              // 選択されたメッセージのプレビューを表示
+              selectedMessagesContainer.innerHTML = '';
+              document.querySelectorAll('.message').forEach(message => {
+                const messageId = message.getAttribute('data-message-id');
+                if (selectedMessages.has(messageId)) {
+                  // メッセージの簡易プレビューを作成
+                  const author = message.querySelector('.message-author').textContent;
+                  const content = message.querySelector('.message-content').textContent;
+                  const preview = document.createElement('div');
+                  preview.className = 'message-preview';
+                  preview.innerHTML = \`<strong>\${author}</strong>: \${content.substring(0, 50)}\${content.length > 50 ? '...' : ''}\`;
+                  selectedMessagesContainer.appendChild(preview);
+                }
+              });
+              
+              // フォームを表示
+              reblogFormContainer.style.display = 'flex';
+            });
+            
+            // キャンセルボタンのクリックイベント
+            cancelButton.addEventListener('click', () => {
+              reblogFormContainer.style.display = 'none';
+            });
+            
+            // フォーム送信イベント
+            reblogForm.addEventListener('submit', async (event) => {
+              event.preventDefault();
+              
+              const formData = new FormData(reblogForm);
+              
+              try {
+                const response = await fetch('/create-reblog', {
+                  method: 'POST',
+                  body: formData
+                });
+                
+                if (response.ok) {
+                  const result = await response.json();
+                  window.location.href = \`/reblog/\${result.id}\`;
+                } else {
+                  const error = await response.text();
+                  alert(\`Reblogの作成に失敗しました: \${error}\`);
+                }
+              } catch (error) {
+                console.error('Reblog作成エラー:', error);
+                alert('Reblogの作成に失敗しました');
+              }
+            });
             
             // 過去のメッセージを読み込む
             async function loadMessagesBefore() {
@@ -705,6 +987,7 @@ app.get('/messages/:channelId/:messageId', async (c) => {
             
             // 初期化
             initializeMessageIds();
+            setupMessageSelection();
           });
         </script>
       </body>
@@ -714,6 +997,265 @@ app.get('/messages/:channelId/:messageId', async (c) => {
     console.error('メッセージ表示エラー:', error)
     return c.redirect('/?error=' + encodeURIComponent('メッセージの表示に失敗しました'))
   }
+})
+
+// Reblog作成処理
+app.post('/create-reblog', async (c) => {
+  const session = getSession(c)
+  if (!session) {
+    return c.json({ error: 'Unauthorized' }, 401)
+  }
+  
+  const user = c.get('user')
+  const { title, description, messageIds, channelId } = await c.req.parseBody()
+  
+  if (!title || typeof title !== 'string' || !messageIds || typeof messageIds !== 'string' || !channelId || typeof channelId !== 'string') {
+    return c.json({ error: '必須項目が不足しています' }, 400)
+  }
+  
+  try {
+    // メッセージIDをカンマ区切りで分割
+    const messageIdArray = messageIds.split(',')
+    
+    if (messageIdArray.length === 0) {
+      return c.json({ error: 'メッセージが選択されていません' }, 400)
+    }
+    
+    // 選択されたメッセージを取得
+    const messages = []
+    for (const messageId of messageIdArray) {
+      const message = await fetchMessage(channelId, messageId, true)
+      messages.push(message)
+    }
+    
+    // Reblogエントリを作成
+    const reblogId = await createReblogEntry(
+      messages,
+      title,
+      description as string || '',
+      user
+    )
+    
+    return c.json({ id: reblogId })
+  } catch (error) {
+    console.error('Reblog作成エラー:', error)
+    return c.json({ error: 'Reblogの作成に失敗しました' }, 500)
+  }
+})
+
+// Reblog一覧ページ
+app.get('/reblog', async (c) => {
+  const session = getSession(c)
+  if (!session) {
+    return c.redirect('/login')
+  }
+  
+  const user = c.get('user')
+  
+  try {
+    // Reblogエントリの一覧を取得
+    const entries = await getReblogEntries()
+    
+    return c.html(`
+      <!DOCTYPE html>
+      <html lang="ja">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Discord Reblog - タイムライン</title>
+        <style>
+          body {
+            font-family: 'Arial', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            background-color: #f9f9f9;
+          }
+          header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #eee;
+          }
+          .user-info {
+            display: flex;
+            align-items: center;
+          }
+          .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin-right: 1rem;
+          }
+          .logout-button, .back-button {
+            background-color: #5865F2;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            margin-left: 1rem;
+          }
+          .logout-button {
+            background-color: #f44336;
+          }
+          .reblog-entry {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+          }
+          .reblog-header {
+            margin-bottom: 1rem;
+          }
+          .reblog-title {
+            font-size: 1.5rem;
+            margin: 0 0 0.5rem 0;
+          }
+          .reblog-description {
+            color: #666;
+            margin: 0 0 1rem 0;
+          }
+          .reblog-meta {
+            display: flex;
+            justify-content: space-between;
+            color: #999;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+          }
+          .message {
+            padding: 1rem;
+            border-bottom: 1px solid #eee;
+          }
+          .message:last-child {
+            border-bottom: none;
+          }
+          .message-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.5rem;
+          }
+          .message-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+          }
+          .message-author {
+            font-weight: bold;
+            margin-right: 0.5rem;
+          }
+          .message-timestamp {
+            color: #666;
+            font-size: 0.8rem;
+          }
+          .message-content {
+            white-space: pre-wrap;
+            word-break: break-word;
+          }
+          .message-attachments {
+            margin-top: 0.5rem;
+          }
+          .message-attachment {
+            display: block;
+            margin-top: 0.5rem;
+          }
+          .message-attachment img {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 4px;
+          }
+          .message-reactions {
+            display: flex;
+            flex-wrap: wrap;
+            margin-top: 0.5rem;
+          }
+          .reaction {
+            display: flex;
+            align-items: center;
+            background-color: #f2f3f5;
+            border-radius: 4px;
+            padding: 0.25rem 0.5rem;
+            margin-right: 0.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+          }
+          .reaction .emoji {
+            width: 20px;
+            height: 20px;
+            margin-right: 0.25rem;
+          }
+          .reaction-count {
+            color: #666;
+            margin-left: 0.25rem;
+          }
+          .no-entries {
+            text-align: center;
+            padding: 2rem;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+          }
+        </style>
+      </head>
+      <body>
+        <header>
+          <h1>Discord Reblog</h1>
+          <div class="user-info">
+            ${user.avatar 
+              ? `<img src="https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png" alt="Avatar" class="user-avatar">` 
+              : ''}
+            <span>${user.username}</span>
+            <a href="/" class="back-button">戻る</a>
+            <a href="/logout" class="logout-button">ログアウト</a>
+          </div>
+        </header>
+        <main>
+          <h2>Reblogタイムライン</h2>
+          
+          ${entries.length === 0 ? `
+            <div class="no-entries">
+              <p>まだReblogエントリがありません。</p>
+              <p>メッセージページでメッセージを選択して、Reblogを作成してください。</p>
+            </div>
+          ` : entries.map(entry => `
+            <div class="reblog-entry">
+              <div class="reblog-header">
+                <h3 class="reblog-title">${escapeHtml(entry.title)}</h3>
+                ${entry.description ? `<p class="reblog-description">${escapeHtml(entry.description)}</p>` : ''}
+                <div class="reblog-meta">
+                  <span>作成者: ${entry.createdByUsername}</span>
+                  <span>作成日時: ${entry.createdAt instanceof Date ? entry.createdAt.toLocaleString('ja-JP') : new Date(entry.createdAt.toDate()).toLocaleString('ja-JP')}</span>
+                </div>
+              </div>
+              <div class="messages">
+                ${entry.messages.map(message => renderMessageHtml(message)).join('')}
+              </div>
+            </div>
+          `).join('')}
+        </main>
+      </body>
+      </html>
+    `)
+  } catch (error) {
+    console.error('Reblog一覧取得エラー:', error)
+    return c.redirect('/?error=' + encodeURIComponent('Reblog一覧の取得に失敗しました'))
+  }
+})
+
+// Reblog詳細ページ
+app.get('/reblog/:id', async (c) => {
+  const session = getSession(c)
+  if (!session) {
+    return c.redirect('/login')
+  }
+  
+  // Reblog一覧ページにリダイレクト
+  return c.redirect('/reblog')
 })
 
 // HTMLエスケープ関数
