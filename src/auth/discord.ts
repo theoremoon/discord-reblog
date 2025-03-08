@@ -13,7 +13,7 @@ const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET
 const REDIRECT_URI = process.env.REDIRECT_URI
 
 // スコープ
-const SCOPES = ['identify', 'guilds'].join(' ')
+const SCOPES = ['identify', 'guilds', 'messages.read'].join(' ')
 
 /**
  * Discord OAuth2認証URLを生成する

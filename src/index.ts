@@ -4,6 +4,7 @@ import { logger } from 'hono/logger'
 import { authMiddleware, guildCheckMiddleware, renderLoginPage, renderGuildErrorPage } from './auth/middleware.js'
 import { handleCallback } from './auth/discord.js'
 import { deleteSession, getSession } from './utils/session.js'
+import { parseMessageLink, fetchMessageContext } from './discord/message.js'
 import './types.js'
 
 // 環境変数からポート番号を取得
@@ -65,6 +66,7 @@ app.use('/', guildCheckMiddleware)
 // トップページ
 app.get('/', (c) => {
   const user = c.get('user')
+  const error = c.req.query('error')
   
   return c.html(`
     <!DOCTYPE html>
@@ -107,6 +109,28 @@ app.get('/', (c) => {
           cursor: pointer;
           text-decoration: none;
         }
+        .message-form {
+          margin-bottom: 2rem;
+        }
+        .message-input {
+          width: 100%;
+          padding: 0.5rem;
+          font-size: 1rem;
+          margin-bottom: 1rem;
+        }
+        .submit-button {
+          background-color: #5865F2;
+          color: white;
+          border: none;
+          padding: 0.5rem 1rem;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 1rem;
+        }
+        .error-message {
+          color: #f44336;
+          margin-bottom: 1rem;
+        }
       </style>
     </head>
     <body>
@@ -121,13 +145,242 @@ app.get('/', (c) => {
         </div>
       </header>
       <main>
-        <h2>ようこそ！</h2>
-        <p>Discordアカウントでログインしました。</p>
+        <h2>メッセージを取得</h2>
+        <p>Discordのメッセージリンクを入力して、メッセージを取得します。</p>
+        
+        ${error ? `<p class="error-message">${error}</p>` : ''}
+        
+        <form action="/fetch-message" method="post" class="message-form">
+          <div>
+            <input 
+              type="text" 
+              name="messageLink" 
+              placeholder="https://discord.com/channels/000000000000000000/000000000000000000/000000000000000000" 
+              class="message-input"
+              required
+            >
+          </div>
+          <div>
+            <button type="submit" class="submit-button">メッセージを取得</button>
+          </div>
+        </form>
       </main>
     </body>
     </html>
   `)
 })
+
+// メッセージ取得処理
+app.post('/fetch-message', async (c) => {
+  const session = getSession(c)
+  if (!session) {
+    return c.redirect('/login')
+  }
+  
+  const { messageLink } = await c.req.parseBody()
+  
+  if (!messageLink || typeof messageLink !== 'string') {
+    return c.redirect('/?error=' + encodeURIComponent('メッセージリンクを入力してください'))
+  }
+  
+  const parsedLink = parseMessageLink(messageLink)
+  
+  if (!parsedLink) {
+    return c.redirect('/?error=' + encodeURIComponent('無効なメッセージリンクです'))
+  }
+  
+  try {
+    const messages = await fetchMessageContext(
+      parsedLink.channelId,
+      parsedLink.messageId
+    )
+    
+    return c.redirect(`/messages/${parsedLink.channelId}/${parsedLink.messageId}`)
+  } catch (error) {
+    console.error('メッセージ取得エラー:', error)
+    return c.redirect('/?error=' + encodeURIComponent('メッセージの取得に失敗しました'))
+  }
+})
+
+// メッセージ表示ページ
+app.get('/messages/:channelId/:messageId', async (c) => {
+  const session = getSession(c)
+  if (!session) {
+    return c.redirect('/login')
+  }
+  
+  const channelId = c.req.param('channelId')
+  const messageId = c.req.param('messageId')
+  
+  try {
+    const messages = await fetchMessageContext(
+      channelId,
+      messageId
+    )
+    
+    const user = c.get('user')
+    
+    return c.html(`
+      <!DOCTYPE html>
+      <html lang="ja">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Discord Reblog - メッセージ</title>
+        <style>
+          body {
+            font-family: 'Arial', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            background-color: #f9f9f9;
+          }
+          header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #eee;
+          }
+          .user-info {
+            display: flex;
+            align-items: center;
+          }
+          .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin-right: 1rem;
+          }
+          .logout-button, .back-button {
+            background-color: #5865F2;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            margin-left: 1rem;
+          }
+          .logout-button {
+            background-color: #f44336;
+          }
+          .message-container {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 1rem;
+            margin-bottom: 2rem;
+          }
+          .message {
+            padding: 1rem;
+            border-bottom: 1px solid #eee;
+          }
+          .message:last-child {
+            border-bottom: none;
+          }
+          .message.highlight {
+            background-color: #f0f7ff;
+            border-left: 4px solid #5865F2;
+          }
+          .message-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.5rem;
+          }
+          .message-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+          }
+          .message-author {
+            font-weight: bold;
+            margin-right: 0.5rem;
+          }
+          .message-timestamp {
+            color: #666;
+            font-size: 0.8rem;
+          }
+          .message-content {
+            white-space: pre-wrap;
+            word-break: break-word;
+          }
+          .message-attachments {
+            margin-top: 0.5rem;
+          }
+          .message-attachment {
+            display: block;
+            margin-top: 0.5rem;
+          }
+          .message-attachment img {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 4px;
+          }
+        </style>
+      </head>
+      <body>
+        <header>
+          <h1>Discord Reblog</h1>
+          <div class="user-info">
+            ${user.avatar 
+              ? `<img src="https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png" alt="Avatar" class="user-avatar">` 
+              : ''}
+            <span>${user.username}</span>
+            <a href="/" class="back-button">戻る</a>
+            <a href="/logout" class="logout-button">ログアウト</a>
+          </div>
+        </header>
+        <main>
+          <h2>メッセージ</h2>
+          <div class="message-container">
+            ${messages.map(message => `
+              <div class="message ${message.id === messageId ? 'highlight' : ''}">
+                <div class="message-header">
+                  ${message.author.avatar 
+                    ? `<img src="https://cdn.discordapp.com/avatars/${message.author.id}/${message.author.avatar}.png" alt="Avatar" class="message-avatar">` 
+                    : ''}
+                  <span class="message-author">${message.author.global_name || message.author.username}</span>
+                  <span class="message-timestamp">${new Date(message.timestamp).toLocaleString('ja-JP')}</span>
+                </div>
+                <div class="message-content">${escapeHtml(message.content)}</div>
+                ${message.attachments.length > 0 ? `
+                  <div class="message-attachments">
+                    ${message.attachments.map(attachment => `
+                      <div class="message-attachment">
+                        ${attachment.content_type?.startsWith('image/') 
+                          ? `<img src="${attachment.url}" alt="${attachment.filename}">`
+                          : `<a href="${attachment.url}" target="_blank">${attachment.filename}</a>`
+                        }
+                      </div>
+                    `).join('')}
+                  </div>
+                ` : ''}
+              </div>
+            `).join('')}
+          </div>
+        </main>
+      </body>
+      </html>
+    `)
+  } catch (error) {
+    console.error('メッセージ表示エラー:', error)
+    return c.redirect('/?error=' + encodeURIComponent('メッセージの表示に失敗しました'))
+  }
+})
+
+// HTMLエスケープ関数
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+    .replace(/\n/g, '<br>')
+}
 
 // サーバーの起動
 serve({
