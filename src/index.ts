@@ -18,17 +18,11 @@ const app = new Hono()
 // ミドルウェアの設定
 app.use('*', logger())
 
-// ログインページ
-app.get('/login', handleLoginPage)
-
-// ログアウト
-app.get('/logout', handleLogout)
-
-// OAuth2コールバック
-app.get('/oauth/callback', handleOAuthCallback)
-
-// ギルドエラーページ
-app.get('/guild-error', handleGuildErrorPage)
+// 認証関連のルート（認証不要）
+app.get('/auth/login', handleLoginPage)
+app.get('/auth/logout', handleLogout)
+app.get('/auth/callback', handleOAuthCallback)
+app.get('/auth/guild-error', handleGuildErrorPage)
 
 // 認証が必要なルート
 // すべてのルートに認証ミドルウェアを適用
@@ -38,32 +32,20 @@ app.use('/*', authMiddleware)
 // 保護されたルートにギルドチェックミドルウェアを適用
 app.use('/', guildCheckMiddleware)
 
-// トップページ
+// ページ表示ルート
 app.get('/', handleHomePage)
+app.get('/messages/:channelId/:messageId', handleMessagePage)
+app.get('/reblog', handleReblogListPage)
+app.get('/reblog/:id', handleReblogDetailPage)
 
-// メッセージ取得処理
-app.post('/fetch-message', handleFetchMessage)
-
-// 最新メッセージ取得処理
-app.post('/fetch-latest-messages', handleFetchLatestMessages)
-
-// 前のメッセージを取得するAPI
+// API ルート - メッセージ関連
+app.post('/api/messages/fetch', handleFetchMessage)
+app.post('/api/messages/fetch-latest', handleFetchLatestMessages)
 app.get('/api/messages/:channelId/:messageId/before', handleFetchMessagesBefore)
-
-// 後のメッセージを取得するAPI
 app.get('/api/messages/:channelId/:messageId/after', handleFetchMessagesAfter)
 
-// メッセージ表示ページ
-app.get('/messages/:channelId/:messageId', handleMessagePage)
-
-// Reblog作成処理
-app.post('/create-reblog', handleCreateReblog)
-
-// Reblog一覧ページ（月別アーカイブ）
-app.get('/reblog', handleReblogListPage)
-
-// Reblog詳細ページ
-app.get('/reblog/:id', handleReblogDetailPage)
+// API ルート - Reblog関連
+app.post('/api/reblog/create', handleCreateReblog)
 
 // サーバーの起動
 serve({
