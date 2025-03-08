@@ -24,6 +24,12 @@ app.get('/auth/logout', handleLogout)
 app.get('/auth/callback', handleOAuthCallback)
 app.get('/auth/guild-error', handleGuildErrorPage)
 
+// 下位互換性のために古いパスも維持
+app.get('/login', (c) => c.redirect('/auth/login', 302))
+app.get('/logout', (c) => c.redirect('/auth/logout', 302))
+app.get('/guild-error', (c) => c.redirect('/auth/guild-error', 302))
+app.get('/oauth/callback', (c) => c.redirect('/auth/callback', 302))
+
 // 認証が必要なルート
 // すべてのルートに認証ミドルウェアを適用
 app.use('/*', authMiddleware)
@@ -46,6 +52,11 @@ app.get('/api/messages/:channelId/:messageId/after', handleFetchMessagesAfter)
 
 // API ルート - Reblog関連
 app.post('/api/reblog/create', handleCreateReblog)
+
+// 下位互換性のために古いパスも維持
+app.post('/fetch-message', (c) => c.redirect('/api/messages/fetch', 307))
+app.post('/fetch-latest-messages', (c) => c.redirect('/api/messages/fetch-latest', 307))
+app.post('/create-reblog', (c) => c.redirect('/api/reblog/create', 307))
 
 // サーバーの起動
 serve({
