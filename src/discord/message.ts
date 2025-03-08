@@ -133,5 +133,7 @@ export async function fetchMessageContext(
 
   // 前のメッセージ + 対象メッセージ + 後のメッセージを結合して返す
   // 前のメッセージは新しい順に取得されるので、逆順にする
-  return [...beforeMessages.reverse(), message, ...afterMessages]
+  // 後のメッセージは古い順に取得されるので、そのままでOK
+  // 時系列順（古い順）に並べるため、beforeMessages（逆順）、message、afterMessagesの順に結合
+  return [...beforeMessages.reverse(), message, ...afterMessages.reverse()]
 }
