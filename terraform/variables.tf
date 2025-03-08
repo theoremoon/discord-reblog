@@ -75,35 +75,8 @@ variable "required_guild_id" {
   sensitive   = true
 }
 
-variable "firebase_api_key" {
-  description = "Firebase API Key"
-  type        = string
-  sensitive   = true
-}
-
-variable "firebase_auth_domain" {
-  description = "Firebase Auth Domain"
-  type        = string
-}
-
 variable "firebase_project_id" {
   description = "Firebase Project ID"
   type        = string
 }
 
-variable "firebase_storage_bucket" {
-  description = "Firebase Storage Bucket"
-  type        = string
-}
-
-variable "firebase_messaging_sender_id" {
-  description = "Firebase Messaging Sender ID"
-  type        = string
-  sensitive   = true
-}
-
-variable "firebase_app_id" {
-  description = "Firebase App ID"
-  type        = string
-  sensitive   = true
-}

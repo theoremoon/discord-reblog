@@ -63,38 +63,8 @@ resource "google_cloud_run_v2_service" "discord_reblog" {
       }
       
       env {
-        name = "FIREBASE_API_KEY"
-        value_source {
-          secret_key_ref {
-            secret  = data.google_secret_manager_secret.firebase_api_key.secret_id
-            version = "latest"
-          }
-        }
-      }
-      
-      env {
-        name  = "FIREBASE_AUTH_DOMAIN"
-        value = var.firebase_auth_domain
-      }
-      
-      env {
         name  = "FIREBASE_PROJECT_ID"
         value = var.firebase_project_id
-      }
-      
-      env {
-        name  = "FIREBASE_STORAGE_BUCKET"
-        value = var.firebase_storage_bucket
-      }
-      
-      env {
-        name  = "FIREBASE_MESSAGING_SENDER_ID"
-        value = var.firebase_messaging_sender_id
-      }
-      
-      env {
-        name  = "FIREBASE_APP_ID"
-        value = var.firebase_app_id
       }
     }
 
