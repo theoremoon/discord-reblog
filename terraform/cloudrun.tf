@@ -21,11 +21,6 @@ resource "google_cloud_run_v2_service" "discord_reblog" {
       }
       
       env {
-        name  = "PORT"
-        value = "8080"
-      }
-      
-      env {
         name  = "REDIRECT_URI"
         value = "https://${var.domain}/auth/callback"
       }
@@ -80,7 +75,6 @@ resource "google_cloud_run_v2_service" "discord_reblog" {
     google_project_service.services,
     google_secret_manager_secret_iam_member.discord_client_secret_access,
     google_secret_manager_secret_iam_member.discord_bot_token_access,
-    google_secret_manager_secret_iam_member.firebase_api_key_access
   ]
 }
 

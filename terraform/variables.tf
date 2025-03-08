@@ -3,6 +3,11 @@ variable "project_id" {
   type        = string
 }
 
+variable "project_number" {
+  description = "Google Cloud プロジェクトNumber"
+  type        = string
+}
+
 variable "region" {
   description = "デプロイするリージョン"
   type        = string
@@ -12,7 +17,6 @@ variable "region" {
 variable "domain" {
   description = "アプリケーションのドメイン名"
   type        = string
-  default     = "reblog.manhattan.cafe"
 }
 
 variable "service_name" {
@@ -53,18 +57,6 @@ variable "memory" {
 
 variable "discord_client_id" {
   description = "Discord OAuth2 クライアントID"
-  type        = string
-  sensitive   = true
-}
-
-variable "discord_client_secret" {
-  description = "Discord OAuth2 クライアントシークレット"
-  type        = string
-  sensitive   = true
-}
-
-variable "discord_bot_token" {
-  description = "Discord Botトークン"
   type        = string
   sensitive   = true
 }

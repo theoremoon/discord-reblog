@@ -12,10 +12,10 @@ terraform {
   
   # 状態ファイルをGCSに保存する設定
   # 実際のデプロイ時にコメントを外して使用
-  # backend "gcs" {
-  #   bucket = "discord-reblog-terraform-state"
-  #   prefix = "terraform/state"
-  # }
+  backend "gcs" {
+    bucket = "discord-reblog-terraform-state"
+    prefix = "terraform/state"
+  }
   
   required_version = ">= 1.0.0"
 }
