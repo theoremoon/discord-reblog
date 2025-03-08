@@ -102,6 +102,7 @@ export class FirestoreMock {
         entryId,
         userId: user.id,
         username: user.username,
+        avatar: user.avatar,
         createdAt: new Date()
       }
       

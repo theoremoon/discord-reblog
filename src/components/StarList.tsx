@@ -14,7 +14,20 @@ export const StarList: FC<StarListProps> = ({ stars }) => {
         <ul className="star-users">
           {stars.map((star) => (
             <li key={star.id} className="star-user">
-              <span className="star-username">{star.username}</span>
+              <div className="star-user-info">
+                {star.avatar ? (
+                  <img 
+                    src={`https://cdn.discordapp.com/avatars/${star.userId}/${star.avatar}.png`} 
+                    alt={star.username} 
+                    className="star-avatar" 
+                    title={star.username}
+                  />
+                ) : (
+                  <div className="star-avatar-placeholder" title={star.username}>
+                    {star.username.charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
               <span className="star-date">
                 {(star.createdAt instanceof Date 
                   ? star.createdAt 
@@ -55,12 +68,34 @@ export const StarList: FC<StarListProps> = ({ stars }) => {
         .star-user:last-child {
           border-bottom: none;
         }
-        .star-username {
+        .star-user-info {
+          display: flex;
+          align-items: center;
+        }
+        .star-avatar {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          margin-right: 10px;
+          object-fit: cover;
+        }
+        .star-avatar-placeholder {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          background-color: #5865F2;
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
           font-weight: bold;
+          margin-right: 10px;
         }
         .star-date {
           color: #666;
           font-size: 0.9em;
+          display: flex;
+          align-items: center;
         }
         .no-stars {
           color: #666;

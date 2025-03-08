@@ -14,6 +14,7 @@ export interface Star {
   entryId: string
   userId: string
   username: string
+  avatar?: string
   createdAt: Date | Timestamp
 }
 

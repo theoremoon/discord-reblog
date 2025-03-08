@@ -119,6 +119,7 @@ export async function addStar(entryId: string, user: User): Promise<string> {
       entryId,
       userId: user.id,
       username: user.username,
+      avatar: user.avatar,
       createdAt: new Date()
     };
     
