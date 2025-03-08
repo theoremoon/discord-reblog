@@ -15,7 +15,7 @@ export async function handleCreateReblog(c: Context) {
   }
   
   const user = c.get('user')
-  const { title, description, messageIds, channelId } = await c.req.parseBody()
+  const { title, messageIds, channelId } = await c.req.parseBody()
   
   if (!title || typeof title !== 'string' || !messageIds || typeof messageIds !== 'string' || !channelId || typeof channelId !== 'string') {
     return c.json({ error: '必須項目が不足しています' }, 400)
@@ -40,7 +40,6 @@ export async function handleCreateReblog(c: Context) {
     const reblogId = await createReblogEntry(
       messages,
       title,
-      description as string || '',
       user
     )
     

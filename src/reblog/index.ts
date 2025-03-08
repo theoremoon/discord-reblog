@@ -8,7 +8,6 @@ import type { User } from '../types.js'
 export async function createReblogEntry(
   messages: DiscordMessage[],
   title: string,
-  description: string,
   user: User
 ): Promise<string> {
   // メッセージを時系列順（古い順）に並べる
@@ -19,7 +18,6 @@ export async function createReblogEntry(
   // Reblogエントリを作成
   const reblogEntry: Omit<ReblogEntry, 'id'> = {
     title,
-    description,
     createdAt: new Date(),
     createdByUserId: user.id,
     createdByUsername: user.username,

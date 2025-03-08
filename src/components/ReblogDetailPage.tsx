@@ -43,9 +43,6 @@ export const ReblogDetailPage: FC<ReblogDetailPageProps> = ({ user, entry }) => 
         <div className="reblog-entry fade-in">
           <div className="reblog-header">
             <h2 className="reblog-title">{escapeHtml(entry.title)}</h2>
-            {entry.description && (
-              <p className="reblog-description">{escapeHtml(entry.description)}</p>
-            )}
             <div className="reblog-meta">
               <span>
                 <i className="meta-icon">👤</i> 

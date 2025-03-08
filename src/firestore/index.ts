@@ -35,7 +35,6 @@ if (process.env.NODE_ENV === 'development' || process.env.USE_FIREBASE_EMULATOR 
 export interface ReblogEntry {
   id?: string
   title: string
-  description: string
   createdAt: Date | Timestamp
   createdByUserId: string
   createdByUsername: string
@@ -48,7 +47,6 @@ export function convertReblogDoc(doc: QueryDocumentSnapshot<DocumentData>): Rebl
   return {
     id: doc.id,
     title: data.title,
-    description: data.description,
     createdAt: data.createdAt.toDate(),
     createdByUserId: data.createdByUserId,
     createdByUsername: data.createdByUsername,

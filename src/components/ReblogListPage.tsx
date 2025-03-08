@@ -75,9 +75,6 @@ export const ReblogListPage: FC<ReblogListPageProps> = ({ user, entries, error }
                           <h3 className="reblog-title">
                             <a href={`/reblog/${entry.id}`}>{escapeHtml(entry.title)}</a>
                           </h3>
-                          {entry.description && (
-                            <p className="reblog-description">{escapeHtml(entry.description)}</p>
-                          )}
                           <div className="reblog-meta">
                             <span>作成者: {entry.createdByUsername}</span>
                             <span>
