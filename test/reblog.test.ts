@@ -74,13 +74,12 @@ describe('Reblog機能', () => {
       const title = 'テストReblog'
       const description = 'これはテスト用のReblogです'
 
-      const reblogId = await createReblogEntry(mockMessages, title, description, mockUser)
+      const reblogId = await createReblogEntry(mockMessages, title, mockUser)
 
       // saveReblogEntryが正しく呼ばれたか確認
       expect(saveReblogEntry).toHaveBeenCalledTimes(1)
       expect(saveReblogEntry).toHaveBeenCalledWith({
         title,
-        description,
         createdAt: expect.any(Date),
         createdByUserId: mockUser.id,
         createdByUsername: mockUser.username,
@@ -95,7 +94,7 @@ describe('Reblog機能', () => {
       // 順番を入れ替えたメッセージ配列
       const unsortedMessages = [...mockMessages].reverse()
 
-      await createReblogEntry(unsortedMessages, 'テスト', '', mockUser)
+      await createReblogEntry(unsortedMessages, 'テスト', mockUser)
 
       // saveReblogEntryに渡されたメッセージが時系列順になっているか確認
       const savedCall = vi.mocked(saveReblogEntry).mock.calls[0][0]

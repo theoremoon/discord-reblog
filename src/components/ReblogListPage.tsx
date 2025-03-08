@@ -84,6 +84,10 @@ export const ReblogListPage: FC<ReblogListPageProps> = ({ user, entries, error }
                                   : new Date(entry.createdAt.toDate()).toLocaleString('ja-JP')
                               }
                             </span>
+                            <span>
+                              <i className="meta-icon">★</i> 
+                              スター数: {entry.starCount || 0}
+                            </span>
                           </div>
                         </div>
                         <div className="message-preview">
@@ -127,6 +131,14 @@ export const ReblogListPage: FC<ReblogListPageProps> = ({ user, entries, error }
           })
         )}
       </main>
+
+      <style>{`
+        .meta-icon {
+          font-style: normal;
+          margin-right: 0.3rem;
+          color: #ffd54f;
+        }
+      `}</style>
 
       <script dangerouslySetInnerHTML={{ __html: `
         // 月別セクションの折りたたみ機能

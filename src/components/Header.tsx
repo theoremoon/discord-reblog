@@ -12,6 +12,7 @@ export const Header: FC<HeaderProps> = ({ user }) => {
       <nav className="main-nav">
         <a href="/" className="nav-link">ホーム</a>
         <a href="/reblog" className="nav-link">Reblogタイムライン</a>
+        <a href="/stars" className="nav-link">スター付きエントリ</a>
       </nav>
       <div className="user-info">
         {user.avatar && (

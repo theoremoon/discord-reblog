@@ -1,7 +1,7 @@
 import type { Context } from 'hono'
 import { getSession } from '../utils/session.js'
 import { fetchMessage } from '../discord/message.js'
-import { getReblogEntries, getReblogEntryById } from '../firestore/index.js'
+import { getReblogEntries, getReblogEntryById, getUserStarForEntry, getStarsByEntryId } from '../firestore/index.js'
 import { createReblogEntry } from '../reblog/index.js'
 import { renderReblogListPage, renderReblogDetailPage } from '../components/renderers.js'
 
@@ -92,7 +92,14 @@ export async function handleReblogDetailPage(c: Context) {
       return c.redirect('/reblog?error=' + encodeURIComponent('指定されたReblogエントリが見つかりません'))
     }
     
-    return c.html(renderReblogDetailPage(user, entry))
+    // ユーザーがスターをつけているか確認
+    const userStar = await getUserStarForEntry(id, user.id)
+    const isStarred = userStar !== null
+    
+    // エントリのスター一覧を取得
+    const stars = await getStarsByEntryId(id)
+    
+    return c.html(renderReblogDetailPage(user, entry, isStarred, stars))
   } catch (error) {
     console.error('Reblog詳細取得エラー:', error)
     return c.redirect('/reblog?error=' + encodeURIComponent('Reblogエントリの取得に失敗しました'))

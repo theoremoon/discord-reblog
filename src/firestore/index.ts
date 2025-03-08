@@ -1,7 +1,8 @@
 import { initializeApp } from 'firebase/app'
-import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, Timestamp, doc, getDoc } from 'firebase/firestore'
+import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, Timestamp, doc, getDoc, where, updateDoc, deleteDoc } from 'firebase/firestore'
 import type { DocumentData, QueryDocumentSnapshot } from 'firebase/firestore'
 import type { DiscordMessage } from '../discord/message.js'
+import type { User, Star } from '../types.js'
 
 // Firebaseの設定
 // 環境変数から取得
@@ -39,6 +40,7 @@ export interface ReblogEntry {
   createdByUserId: string
   createdByUsername: string
   messages: DiscordMessage[]
+  starCount?: number  // スター数
 }
 
 // Firestoreのドキュメントからオブジェクトに変換するヘルパー関数
@@ -50,7 +52,8 @@ export function convertReblogDoc(doc: QueryDocumentSnapshot<DocumentData>): Rebl
     createdAt: data.createdAt.toDate(),
     createdByUserId: data.createdByUserId,
     createdByUsername: data.createdByUsername,
-    messages: data.messages
+    messages: data.messages,
+    starCount: data.starCount || 0
   }
 }
 
@@ -99,5 +102,147 @@ export async function getReblogEntryById(id: string): Promise<ReblogEntry | null
   } catch (error) {
     console.error('Reblogエントリの取得に失敗しました:', error)
     throw error
+  }
+}
+
+// スターを追加する
+export async function addStar(entryId: string, user: User): Promise<string> {
+  try {
+    // 既存のスターをチェック
+    const existingStar = await getUserStarForEntry(entryId, user.id);
+    if (existingStar) {
+      return existingStar.id!;
+    }
+
+    // スターを追加
+    const star: Omit<Star, 'id'> = {
+      entryId,
+      userId: user.id,
+      username: user.username,
+      createdAt: new Date()
+    };
+    
+    const docRef = await addDoc(collection(db, 'stars'), {
+      ...star,
+      createdAt: Timestamp.fromDate(star.createdAt instanceof Date ? star.createdAt : new Date())
+    });
+    
+    // エントリのスター数を更新
+    await updateStarCount(entryId);
+    
+    return docRef.id;
+  } catch (error) {
+    console.error('スターの追加に失敗しました:', error);
+    throw error;
+  }
+}
+
+// スターを削除する
+export async function removeStar(entryId: string, userId: string): Promise<void> {
+  try {
+    const star = await getUserStarForEntry(entryId, userId);
+    if (star && star.id) {
+      await deleteDoc(doc(db, 'stars', star.id));
+      
+      // エントリのスター数を更新
+      await updateStarCount(entryId);
+    }
+  } catch (error) {
+    console.error('スターの削除に失敗しました:', error);
+    throw error;
+  }
+}
+
+// エントリのスター数を更新する
+async function updateStarCount(entryId: string): Promise<void> {
+  try {
+    const stars = await getStarsByEntryId(entryId);
+    const entryRef = doc(db, 'reblog_entries', entryId);
+    await updateDoc(entryRef, {
+      starCount: stars.length
+    });
+  } catch (error) {
+    console.error('スター数の更新に失敗しました:', error);
+    throw error;
+  }
+}
+
+// エントリのスターを取得する
+export async function getStarsByEntryId(entryId: string): Promise<Star[]> {
+  try {
+    const q = query(
+      collection(db, 'stars'),
+      where('entryId', '==', entryId),
+      orderBy('createdAt', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      createdAt: doc.data().createdAt.toDate()
+    } as Star));
+  } catch (error) {
+    console.error('スターの取得に失敗しました:', error);
+    throw error;
+  }
+}
+
+// ユーザーがエントリにつけたスターを取得する
+export async function getUserStarForEntry(entryId: string, userId: string): Promise<Star | null> {
+  try {
+    const q = query(
+      collection(db, 'stars'),
+      where('entryId', '==', entryId),
+      where('userId', '==', userId),
+      limit(1)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    if (querySnapshot.empty) {
+      return null;
+    }
+    
+    const doc = querySnapshot.docs[0];
+    return {
+      id: doc.id,
+      ...doc.data(),
+      createdAt: doc.data().createdAt.toDate()
+    } as Star;
+  } catch (error) {
+    console.error('ユーザースターの取得に失敗しました:', error);
+    throw error;
+  }
+}
+
+// ユーザーがスターをつけたエントリを取得する
+export async function getStarredEntriesByUserId(userId: string): Promise<ReblogEntry[]> {
+  try {
+    // ユーザーのスターを取得
+    const q = query(
+      collection(db, 'stars'),
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    const stars = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    } as Star));
+    
+    // スターがついているエントリを取得
+    const entries: ReblogEntry[] = [];
+    for (const star of stars) {
+      const entry = await getReblogEntryById(star.entryId);
+      if (entry) {
+        entries.push(entry);
+      }
+    }
+    
+    return entries;
+  } catch (error) {
+    console.error('スター付きエントリの取得に失敗しました:', error);
+    throw error;
   }
 }

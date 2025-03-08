@@ -7,6 +7,7 @@ import { HomePage } from './HomePage.js'
 import { MessagePage } from './MessagePage.js'
 import { ReblogListPage } from './ReblogListPage.js'
 import { ReblogDetailPage } from './ReblogDetailPage.js'
+import { StarredEntriesPage } from './StarredEntriesPage.js'
 import type { User } from '../types.js'
 import type { DiscordChannel, DiscordMessage } from '../discord/message.js'
 import type { ReblogEntry } from '../firestore/index.js'
@@ -31,6 +32,10 @@ export function renderReblogListPage(user: User, entries: ReblogEntry[], error?:
   return <ReblogListPage user={user} entries={entries} error={error} />
 }
 
-export function renderReblogDetailPage(user: User, entry: ReblogEntry) {
-  return <ReblogDetailPage user={user} entry={entry} />
+export function renderReblogDetailPage(user: User, entry: ReblogEntry, isStarred: boolean = false, stars: any[] = []) {
+  return <ReblogDetailPage user={user} entry={entry} isStarred={isStarred} stars={stars} />
+}
+
+export function renderStarredEntriesPage(user: User, entries: ReblogEntry[]) {
+  return <StarredEntriesPage user={user} entries={entries} />
 }

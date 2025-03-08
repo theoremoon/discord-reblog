@@ -1,17 +1,21 @@
 import type { FC } from 'hono/jsx'
-import type { User } from '../types.js'
+import type { User, Star } from '../types.js'
 import type { ReblogEntry } from '../firestore/index.js'
 import { Layout } from './Layout.js'
 import { Header } from './Header.js'
 import { GlobalStyles } from './GlobalStyles.js'
 import { Message } from './Message.js'
+import { StarButton } from './StarButton.js'
+import { StarList } from './StarList.js'
 
 type ReblogDetailPageProps = {
   user: User
   entry: ReblogEntry
+  isStarred: boolean
+  stars: Star[]
 }
 
-export const ReblogDetailPage: FC<ReblogDetailPageProps> = ({ user, entry }) => {
+export const ReblogDetailPage: FC<ReblogDetailPageProps> = ({ user, entry, isStarred, stars }) => {
   // Helper function to escape HTML
   const escapeHtml = (text: string): string => {
     return text
@@ -56,7 +60,14 @@ export const ReblogDetailPage: FC<ReblogDetailPageProps> = ({ user, entry }) => 
                 <i className="meta-icon">💬</i> 
                 メッセージ数: {entry.messages.length}件
               </span>
+              <span>
+                <i className="meta-icon">★</i> 
+                スター数: {entry.starCount || 0}
+              </span>
+              <StarButton entryId={entry.id!} isStarred={isStarred} starCount={entry.starCount || 0} />
             </div>
+            
+            <StarList stars={stars} />
           </div>
           
           <div className="messages-container">
@@ -78,6 +89,7 @@ export const ReblogDetailPage: FC<ReblogDetailPageProps> = ({ user, entry }) => 
         </div>
       </main>
 
+      <script src="/static/js/stars.js"></script>
       <style>{`
         .reblog-entry {
           background-color: white;

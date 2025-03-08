@@ -1,12 +1,15 @@
 import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
 import { logger } from 'hono/logger'
+import { serveStatic } from '@hono/node-server/serve-static'
 import { authMiddleware, guildCheckMiddleware } from './auth/middleware.js'
 import { handleLoginPage, handleLogout, handleOAuthCallback, handleGuildErrorPage } from './routes/auth.js'
 import { handleHomePage } from './routes/index.js'
 import { handleFetchMessage, handleFetchLatestMessages, handleMessagePage } from './routes/messages.js'
 import { handleCreateReblog, handleReblogListPage, handleReblogDetailPage } from './routes/reblog.js'
 import { handleFetchMessagesBefore, handleFetchMessagesAfter } from './routes/api/messages.js'
+import { handleAddStar, handleRemoveStar, handleGetStars } from './routes/api/stars.js'
+import { handleStarredEntriesPage } from './routes/stars.js'
 import './types.js'
 
 // 環境変数からポート番号を取得
@@ -17,6 +20,9 @@ const app = new Hono()
 
 // ミドルウェアの設定
 app.use('*', logger())
+
+// 静的ファイルの提供
+app.use('/static/*', serveStatic({ root: './src' }))
 
 // 認証関連のルート（認証不要）
 app.get('/auth/login', handleLoginPage)
@@ -52,6 +58,14 @@ app.get('/api/messages/:channelId/:messageId/after', handleFetchMessagesAfter)
 
 // API ルート - Reblog関連
 app.post('/api/reblog/create', handleCreateReblog)
+
+// API ルート - スター関連
+app.post('/api/stars/add', handleAddStar)
+app.post('/api/stars/remove', handleRemoveStar)
+app.get('/api/stars/:id', handleGetStars)
+
+// スター付きエントリ一覧ページ
+app.get('/stars', handleStarredEntriesPage)
 
 // 下位互換性のために古いパスも維持
 app.post('/fetch-message', (c) => c.redirect('/api/messages/fetch', 307))
