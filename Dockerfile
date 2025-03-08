@@ -15,7 +15,7 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 
 # TypeScriptのコンパイル
-RUN pnpm tsc
+RUN pnpm build
 
 # 実行用のイメージ
 FROM node:20-slim
