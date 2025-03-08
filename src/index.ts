@@ -6,7 +6,7 @@ import { handleCallback } from './auth/discord.js'
 import { deleteSession, getSession } from './utils/session.js'
 import { parseMessageLink, fetchMessageContext, fetchMessagesDirection, fetchGuildChannels, fetchLatestMessages, fetchMessage } from './discord/message.js'
 import type { DiscordChannel, DiscordMessage } from './discord/message.js'
-import { getReblogEntries } from './firestore/index.js'
+import { getReblogEntries, getReblogEntryById, type ReblogEntry } from './firestore/index.js'
 import { createReblogEntry, renderMessageHtml } from './reblog/index.js'
 import './types.js'
 
@@ -1043,7 +1043,7 @@ app.post('/create-reblog', async (c) => {
   }
 })
 
-// Reblog一覧ページ
+// Reblog一覧ページ（月別アーカイブ）
 app.get('/reblog', async (c) => {
   const session = getSession(c)
   if (!session) {
@@ -1055,6 +1055,23 @@ app.get('/reblog', async (c) => {
   try {
     // Reblogエントリの一覧を取得
     const entries = await getReblogEntries()
+    
+    // 月別にエントリをグループ化
+    const entriesByMonth: Record<string, ReblogEntry[]> = {}
+    
+    entries.forEach(entry => {
+      const date = entry.createdAt instanceof Date ? entry.createdAt : new Date(entry.createdAt.toDate())
+      const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`
+      
+      if (!entriesByMonth[monthKey]) {
+        entriesByMonth[monthKey] = []
+      }
+      
+      entriesByMonth[monthKey].push(entry)
+    })
+    
+    // 月のキーを降順（新しい順）にソート
+    const sortedMonths = Object.keys(entriesByMonth).sort().reverse()
     
     return c.html(`
       <!DOCTYPE html>
@@ -1102,19 +1119,35 @@ app.get('/reblog', async (c) => {
           .logout-button {
             background-color: #f44336;
           }
+          .month-section {
+            margin-bottom: 3rem;
+          }
+          .month-header {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid #5865F2;
+          }
           .reblog-entry {
             background-color: white;
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             padding: 1.5rem;
-            margin-bottom: 2rem;
+            margin-bottom: 1.5rem;
           }
           .reblog-header {
             margin-bottom: 1rem;
           }
           .reblog-title {
-            font-size: 1.5rem;
+            font-size: 1.3rem;
             margin: 0 0 0.5rem 0;
+          }
+          .reblog-title a {
+            color: #5865F2;
+            text-decoration: none;
+          }
+          .reblog-title a:hover {
+            text-decoration: underline;
           }
           .reblog-description {
             color: #666;
@@ -1126,6 +1159,192 @@ app.get('/reblog', async (c) => {
             color: #999;
             font-size: 0.9rem;
             margin-bottom: 1rem;
+          }
+          .message-preview {
+            padding: 0.8rem;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+            margin-bottom: 0.5rem;
+          }
+          .message-preview-count {
+            text-align: right;
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 0.5rem;
+          }
+          .no-entries {
+            text-align: center;
+            padding: 2rem;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+          }
+        </style>
+      </head>
+      <body>
+        <header>
+          <h1>Discord Reblog</h1>
+          <div class="user-info">
+            ${user.avatar 
+              ? `<img src="https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png" alt="Avatar" class="user-avatar">` 
+              : ''}
+            <span>${user.username}</span>
+            <a href="/" class="back-button">戻る</a>
+            <a href="/logout" class="logout-button">ログアウト</a>
+          </div>
+        </header>
+        <main>
+          <h2>Reblogタイムライン</h2>
+          
+          ${entries.length === 0 ? `
+            <div class="no-entries">
+              <p>まだReblogエントリがありません。</p>
+              <p>メッセージページでメッセージを選択して、Reblogを作成してください。</p>
+            </div>
+          ` : sortedMonths.map(month => {
+            const monthEntries = entriesByMonth[month]
+            const [year, monthNum] = month.split('-')
+            const monthName = new Date(parseInt(year), parseInt(monthNum) - 1).toLocaleString('ja-JP', { month: 'long' })
+            
+            return `
+              <div class="month-section">
+                <h3 class="month-header">${year}年${monthName}</h3>
+                ${monthEntries.map(entry => {
+                  // 最初の3つのメッセージだけを表示
+                  const previewMessages = entry.messages.slice(0, 3)
+                  const remainingCount = entry.messages.length - previewMessages.length
+                  
+                  return `
+                    <div class="reblog-entry">
+                      <div class="reblog-header">
+                        <h3 class="reblog-title">
+                          <a href="/reblog/${entry.id}">${escapeHtml(entry.title)}</a>
+                        </h3>
+                        ${entry.description ? `<p class="reblog-description">${escapeHtml(entry.description)}</p>` : ''}
+                        <div class="reblog-meta">
+                          <span>作成者: ${entry.createdByUsername}</span>
+                          <span>作成日時: ${entry.createdAt instanceof Date ? entry.createdAt.toLocaleString('ja-JP') : new Date(entry.createdAt.toDate()).toLocaleString('ja-JP')}</span>
+                        </div>
+                      </div>
+                      <div class="message-preview">
+                        ${previewMessages.map((message) => {
+                          // メッセージの内容を50文字までに制限
+                          const content = message.content || '<em>メッセージ内容がありません</em>'
+                          const truncatedContent = content.length > 50 ? content.substring(0, 50) + '...' : content
+                          return `<div><strong>${message.author.global_name || message.author.username}:</strong> ${escapeHtml(truncatedContent)}</div>`
+                        }).join('<hr style="border: none; border-top: 1px solid #ddd; margin: 0.5rem 0;">')}
+                        
+                        ${remainingCount > 0 ? `
+                          <div class="message-preview-count">
+                            <a href="/reblog/${entry.id}">他${remainingCount}件のメッセージを表示</a>
+                          </div>
+                        ` : ''}
+                      </div>
+                    </div>
+                  `
+                }).join('')}
+              </div>
+            `
+          }).join('')}
+        </main>
+      </body>
+      </html>
+    `)
+  } catch (error) {
+    console.error('Reblog一覧取得エラー:', error)
+    return c.redirect('/?error=' + encodeURIComponent('Reblog一覧の取得に失敗しました'))
+  }
+})
+
+// Reblog詳細ページ
+app.get('/reblog/:id', async (c) => {
+  const session = getSession(c)
+  if (!session) {
+    return c.redirect('/login')
+  }
+  
+  const user = c.get('user')
+  const id = c.req.param('id')
+  
+  try {
+    // IDを指定してReblogエントリを取得
+    const entry = await getReblogEntryById(id)
+    
+    if (!entry) {
+      return c.redirect('/reblog?error=' + encodeURIComponent('指定されたReblogエントリが見つかりません'))
+    }
+    
+    return c.html(`
+      <!DOCTYPE html>
+      <html lang="ja">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${escapeHtml(entry.title)} - Discord Reblog</title>
+        <style>
+          body {
+            font-family: 'Arial', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            background-color: #f9f9f9;
+          }
+          header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #eee;
+          }
+          .user-info {
+            display: flex;
+            align-items: center;
+          }
+          .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin-right: 1rem;
+          }
+          .logout-button, .back-button {
+            background-color: #5865F2;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            margin-left: 1rem;
+          }
+          .logout-button {
+            background-color: #f44336;
+          }
+          .reblog-entry {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+          }
+          .reblog-header {
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #eee;
+          }
+          .reblog-title {
+            font-size: 1.8rem;
+            margin: 0 0 0.5rem 0;
+          }
+          .reblog-description {
+            color: #666;
+            margin: 0 0 1rem 0;
+          }
+          .reblog-meta {
+            display: flex;
+            justify-content: space-between;
+            color: #999;
+            font-size: 0.9rem;
           }
           .message {
             padding: 1rem;
@@ -1193,13 +1412,6 @@ app.get('/reblog', async (c) => {
             color: #666;
             margin-left: 0.25rem;
           }
-          .no-entries {
-            text-align: center;
-            padding: 2rem;
-            background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-          }
         </style>
       </head>
       <body>
@@ -1210,52 +1422,32 @@ app.get('/reblog', async (c) => {
               ? `<img src="https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png" alt="Avatar" class="user-avatar">` 
               : ''}
             <span>${user.username}</span>
-            <a href="/" class="back-button">戻る</a>
+            <a href="/reblog" class="back-button">タイムラインに戻る</a>
             <a href="/logout" class="logout-button">ログアウト</a>
           </div>
         </header>
         <main>
-          <h2>Reblogタイムライン</h2>
-          
-          ${entries.length === 0 ? `
-            <div class="no-entries">
-              <p>まだReblogエントリがありません。</p>
-              <p>メッセージページでメッセージを選択して、Reblogを作成してください。</p>
-            </div>
-          ` : entries.map(entry => `
-            <div class="reblog-entry">
-              <div class="reblog-header">
-                <h3 class="reblog-title">${escapeHtml(entry.title)}</h3>
-                ${entry.description ? `<p class="reblog-description">${escapeHtml(entry.description)}</p>` : ''}
-                <div class="reblog-meta">
-                  <span>作成者: ${entry.createdByUsername}</span>
-                  <span>作成日時: ${entry.createdAt instanceof Date ? entry.createdAt.toLocaleString('ja-JP') : new Date(entry.createdAt.toDate()).toLocaleString('ja-JP')}</span>
-                </div>
-              </div>
-              <div class="messages">
-                ${entry.messages.map(message => renderMessageHtml(message)).join('')}
+          <div class="reblog-entry">
+            <div class="reblog-header">
+              <h2 class="reblog-title">${escapeHtml(entry.title)}</h2>
+              ${entry.description ? `<p class="reblog-description">${escapeHtml(entry.description)}</p>` : ''}
+              <div class="reblog-meta">
+                <span>作成者: ${entry.createdByUsername}</span>
+                <span>作成日時: ${entry.createdAt instanceof Date ? entry.createdAt.toLocaleString('ja-JP') : new Date(entry.createdAt.toDate()).toLocaleString('ja-JP')}</span>
               </div>
             </div>
-          `).join('')}
+            <div class="messages">
+              ${entry.messages.map(message => renderMessageHtml(message)).join('')}
+            </div>
+          </div>
         </main>
       </body>
       </html>
     `)
   } catch (error) {
-    console.error('Reblog一覧取得エラー:', error)
-    return c.redirect('/?error=' + encodeURIComponent('Reblog一覧の取得に失敗しました'))
+    console.error('Reblog詳細取得エラー:', error)
+    return c.redirect('/reblog?error=' + encodeURIComponent('Reblogエントリの取得に失敗しました'))
   }
-})
-
-// Reblog詳細ページ
-app.get('/reblog/:id', async (c) => {
-  const session = getSession(c)
-  if (!session) {
-    return c.redirect('/login')
-  }
-  
-  // Reblog一覧ページにリダイレクト
-  return c.redirect('/reblog')
 })
 
 // HTMLエスケープ関数

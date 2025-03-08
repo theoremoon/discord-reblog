@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app'
-import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, Timestamp } from 'firebase/firestore'
+import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, Timestamp, doc, getDoc } from 'firebase/firestore'
 import type { DocumentData, QueryDocumentSnapshot } from 'firebase/firestore'
 import type { DiscordMessage } from '../discord/message.js'
 
@@ -71,7 +71,7 @@ export async function saveReblogEntry(entry: Omit<ReblogEntry, 'id'>): Promise<s
 }
 
 // Reblogエントリの一覧を取得する
-export async function getReblogEntries(entriesLimit: number = 10): Promise<ReblogEntry[]> {
+export async function getReblogEntries(entriesLimit: number = 50): Promise<ReblogEntry[]> {
   try {
     const q = query(
       collection(db, 'reblog_entries'),
@@ -81,6 +81,23 @@ export async function getReblogEntries(entriesLimit: number = 10): Promise<Reblo
     
     const querySnapshot = await getDocs(q)
     return querySnapshot.docs.map(convertReblogDoc)
+  } catch (error) {
+    console.error('Reblogエントリの取得に失敗しました:', error)
+    throw error
+  }
+}
+
+// IDを指定してReblogエントリを取得する
+export async function getReblogEntryById(id: string): Promise<ReblogEntry | null> {
+  try {
+    const docRef = doc(db, 'reblog_entries', id)
+    const docSnap = await getDoc(docRef)
+    
+    if (docSnap.exists()) {
+      return convertReblogDoc(docSnap as QueryDocumentSnapshot<DocumentData>)
+    } else {
+      return null
+    }
   } catch (error) {
     console.error('Reblogエントリの取得に失敗しました:', error)
     throw error
