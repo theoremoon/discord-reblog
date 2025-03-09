@@ -126,7 +126,6 @@ export const GlobalStyles: FC = () => {
         font-size: 0.8rem;
       }
       .message-content {
-        white-space: pre-wrap;
         word-break: break-word;
         line-height: 1.5;
       }

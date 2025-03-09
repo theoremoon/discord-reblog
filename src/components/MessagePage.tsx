@@ -233,33 +233,54 @@ export const MessagePage: FC<MessagePageProps> = ({
           
           // メッセージ選択の処理
           function setupMessageSelection() {
-            // 既存のチェックボックスにイベントリスナーを設定
+            // 既存のイベントリスナーを削除（重複防止）
+            removeMessageEventListeners();
+            
+            // チェックボックスにイベントリスナーを設定
             document.querySelectorAll('.message-checkbox').forEach(checkbox => {
               checkbox.addEventListener('change', handleCheckboxChange);
+              // データ属性でイベントリスナーが設定済みであることをマーク
+              checkbox.setAttribute('data-has-listener', 'true');
             });
             
             // メッセージクリックでもチェックボックスを切り替え
             document.querySelectorAll('.message').forEach(message => {
-              message.addEventListener('click', (event) => {
-                // チェックボックス自体のクリックは除外
-                if (event.target.classList.contains('message-checkbox')) {
-                  return;
-                }
-                
-                // メッセージ内のリンクやボタンのクリックは除外
-                if (event.target.tagName === 'A' || event.target.tagName === 'BUTTON' || 
-                    event.target.closest('a') || event.target.closest('button')) {
-                  return;
-                }
-                
-                const messageId = message.getAttribute('data-message-id');
-                const checkbox = message.querySelector('.message-checkbox');
-                checkbox.checked = !checkbox.checked;
-                
-                // チェックボックスの変更イベントを発火
-                const changeEvent = new Event('change');
-                checkbox.dispatchEvent(changeEvent);
-              });
+              message.addEventListener('click', handleMessageClick);
+              // データ属性でイベントリスナーが設定済みであることをマーク
+              message.setAttribute('data-has-listener', 'true');
+            });
+          }
+          
+          // メッセージクリックのイベントハンドラ（関数として分離）
+          function handleMessageClick(event) {
+            // チェックボックス自体のクリックは除外
+            if (event.target.classList.contains('message-checkbox')) {
+              return;
+            }
+            
+            // メッセージ内のリンクやボタンのクリックは除外
+            if (event.target.tagName === 'A' || event.target.tagName === 'BUTTON' || 
+                event.target.closest('a') || event.target.closest('button')) {
+              return;
+            }
+            
+            const messageId = this.getAttribute('data-message-id');
+            const checkbox = this.querySelector('.message-checkbox');
+            checkbox.checked = !checkbox.checked;
+            
+            // チェックボックスの変更イベントを発火
+            const changeEvent = new Event('change');
+            checkbox.dispatchEvent(changeEvent);
+          }
+          
+          // 既存のイベントリスナーを削除する関数
+          function removeMessageEventListeners() {
+            document.querySelectorAll('.message[data-has-listener="true"]').forEach(message => {
+              message.removeEventListener('click', handleMessageClick);
+            });
+            
+            document.querySelectorAll('.message-checkbox[data-has-listener="true"]').forEach(checkbox => {
+              checkbox.removeEventListener('change', handleCheckboxChange);
             });
           }
           
@@ -479,6 +500,54 @@ export const MessagePage: FC<MessagePageProps> = ({
           
           // メッセージHTMLを生成する関数
           function createMessageHtml(message) {
+            // メッセージの内容をエスケープ
+            const escapedContent = message.content 
+              ? escapeHtml(message.content) 
+              : '<em>メッセージ内容がありません</em>';
+            
+            // ハイライト表示用の追加情報
+            const highlightInfo = message.id === messageId 
+              ? \`<div style="margin-top: 10px; font-size: 0.8rem; color: #666;">メッセージID: \${message.id}</div>\` 
+              : '';
+            
+            // 添付ファイルのHTML
+            let attachmentsHtml = '';
+            if (message.attachments.length > 0) {
+              attachmentsHtml = \`
+                <div class="message-attachments">
+                  \${message.attachments.map(attachment => \`
+                    <div class="message-attachment">
+                      \${attachment.content_type?.startsWith('image/') 
+                        ? \`<img src="\${attachment.url}" alt="\${attachment.filename}">\`
+                        : \`<a href="\${attachment.url}" target="_blank" rel="noopener noreferrer">\${attachment.filename}</a>\`
+                      }
+                    </div>
+                  \`).join('')}
+                </div>
+              \`;
+            }
+            
+            // リアクションのHTML
+            let reactionsHtml = '';
+            if (message.reactions && message.reactions.length > 0) {
+              reactionsHtml = \`
+                <div class="message-reactions">
+                  \${message.reactions.map(reaction => {
+                    const emojiHtml = reaction.emoji.id
+                      ? \`<img class="emoji" src="https://cdn.discordapp.com/emojis/\${reaction.emoji.id}.png" alt="\${reaction.emoji.name || ''}">\`
+                      : reaction.emoji.name;
+                    
+                    return \`
+                      <div class="reaction" title="\${reaction.count}人がリアクション">
+                        \${emojiHtml} <span class="reaction-count">\${reaction.count}</span>
+                      </div>
+                    \`;
+                  }).join('')}
+                </div>
+              \`;
+            }
+            
+            // 最終的なメッセージHTML
             return \`
               <div class="message \${message.id === messageId ? 'highlight' : ''}" data-message-id="\${message.id}">
                 <input type="checkbox" class="message-checkbox" data-message-id="\${message.id}">
@@ -490,36 +559,11 @@ export const MessagePage: FC<MessagePageProps> = ({
                   <span class="message-timestamp">\${new Date(message.timestamp).toLocaleString('ja-JP')}</span>
                 </div>
                 <div class="message-content">
-                  \${message.content ? escapeHtml(message.content) : '<em>メッセージ内容がありません</em>'}
-                  \${message.id === messageId ? \`<div style="margin-top: 10px; font-size: 0.8rem; color: #666;">メッセージID: \${message.id}</div>\` : ''}
+                  \${escapedContent}
+                  \${highlightInfo}
                 </div>
-                \${message.attachments.length > 0 ? \`
-                  <div class="message-attachments">
-                    \${message.attachments.map(attachment => \`
-                      <div class="message-attachment">
-                        \${attachment.content_type?.startsWith('image/') 
-                          ? \`<img src="\${attachment.url}" alt="\${attachment.filename}">\`
-                          : \`<a href="\${attachment.url}" target="_blank">\${attachment.filename}</a>\`
-                        }
-                      </div>
-                    \`).join('')}
-                  </div>
-                \` : ''}
-                \${message.reactions && message.reactions.length > 0 ? \`
-                  <div class="message-reactions">
-                    \${message.reactions.map(reaction => {
-                      const emojiHtml = reaction.emoji.id
-                        ? \`<img class="emoji" src="https://cdn.discordapp.com/emojis/\${reaction.emoji.id}.png" alt="\${reaction.emoji.name}">\`
-                        : reaction.emoji.name;
-                      
-                      return \`
-                        <div class="reaction" title="\${reaction.count}人がリアクション">
-                          \${emojiHtml} <span class="reaction-count">\${reaction.count}</span>
-                        </div>
-                      \`;
-                    }).join('')}
-                  </div>
-                \` : ''}
+                \${attachmentsHtml}
+                \${reactionsHtml}
               </div>
             \`;
           }
