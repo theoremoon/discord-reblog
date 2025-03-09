@@ -75,19 +75,6 @@ export const MessagePage: FC<MessagePageProps> = ({
                   placeholder="Reblogのタイトルを入力してください" 
                   className="title-input"
                 />
-                <div className="form-hint">わかりやすいタイトルをつけましょう</div>
-              </div>
-              <div className="form-group">
-                <label htmlFor="description">
-                  <i className="form-icon">📄</i> 説明
-                </label>
-                <textarea 
-                  id="description" 
-                  name="description" 
-                  placeholder="このReblogの内容や目的について説明してください（任意）"
-                  className="description-input"
-                ></textarea>
-                <div className="form-hint">Reblogの内容や目的を簡潔に説明しましょう</div>
               </div>
               <div className="form-group">
                 <label>
