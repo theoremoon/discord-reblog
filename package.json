@@ -13,6 +13,7 @@
     "cookie": "^1.0.2",
     "firebase": "^11.4.0",
     "hono": "^4.7.4",
+    "node-cache": "^5.1.2",
     "node-fetch": "2"
   },
   "devDependencies": {

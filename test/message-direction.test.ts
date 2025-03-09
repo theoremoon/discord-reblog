@@ -1,14 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { fetchMessagesDirection } from '../src/discord/message.js'
+import { clearCache } from '../src/utils/cache.js'
 import fetch from 'node-fetch'
 
 // node-fetchをモック化
 vi.mock('node-fetch')
 
 describe('fetchMessagesDirection', () => {
-  // テスト前にモックをリセット
+  // テスト前にモックをリセットしキャッシュをクリア
   beforeEach(() => {
     vi.resetAllMocks()
+    clearCache()
   })
 
   // テスト後にモックをリストア
