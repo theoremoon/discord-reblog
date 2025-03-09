@@ -19,6 +19,11 @@ resource "google_cloud_run_v2_service" "discord_reblog" {
         name  = "NODE_ENV"
         value = "production"
       }
+
+      env {
+        name  = "DISCORD_CACHE_TTL"
+        value = "3600"
+      }
       
       env {
         name  = "REDIRECT_URI"
