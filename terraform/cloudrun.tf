@@ -90,3 +90,10 @@ resource "google_cloud_run_service_iam_member" "public_access" {
   role     = "roles/run.invoker"
   member   = "allUsers"
 }
+
+# サービスアカウントにFirestoreへのアクセス権限を付与
+resource "google_project_iam_member" "firestore_access" {
+  project = var.project_id
+  role    = "roles/datastore.user"  # Firestoreへの読み書き権限
+  member  = "serviceAccount:${var.project_number}-compute@developer.gserviceaccount.com"
+}

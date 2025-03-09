@@ -1,0 +1,15 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 基本ルール：認証されたサービスアカウントのみがアクセス可能
+    match /{document=**} {
+      allow read, write: if false; // クライアントからの直接アクセスを禁止
+    }
+    
+    // 必要に応じて特定のコレクションに対するルールを追加できます
+    // 例：
+    // match /reblog_entries/{entryId} {
+    //   allow read: if true; // 読み取りは誰でも可能
+    // }
+  }
+}
